@@ -1,19 +1,26 @@
-import { BARK_KEY_DEFAULT } from './constant';
-import { syncGarminGlobal2GarminCN } from './utils/garmin_global';
+/**
+ * 同步 Garmin Global -> CN
+ */
 
-const axios = require('axios');
-const core = require('@actions/core');
-const BARK_KEY = process.env.BARK_KEY ?? BARK_KEY_DEFAULT;
+import { syncGlobal2CN } from './services/sync';
+import { sendErrorNotification, sendSuccessNotification } from './services/notification';
+import { logger } from './utils/logger';
 
-try {
-    syncGarminGlobal2GarminCN();
-} catch (e) {
-    axios.get(
-        `https://api.day.app/${BARK_KEY}/Garmin CN -> Garmin Global 同步数据运行失败了，快去检查！/${e.message}`);
-    core.setFailed(e.message);
-    throw new Error(e);
-}
+const main = async () => {
+  logger.info('========== 开始同步 Global -> CN ==========');
 
+  try {
+    const result = await syncGlobal2CN();
 
+    if (result.success) {
+      await sendSuccessNotification('Garmin Global -> CN', result.message);
+    }
+  } catch (error) {
+    await sendErrorNotification('Garmin Global -> CN 同步', error as Error);
+    process.exit(1);
+  }
 
+  logger.info('========== 同步完成 ==========');
+};
 
+main();

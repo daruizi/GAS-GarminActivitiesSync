@@ -1,19 +1,27 @@
-import { BARK_KEY_DEFAULT } from './constant';
-import { migrateGarminGlobal2GarminCN } from './utils/garmin_global';
+/**
+ * 迁移 Garmin Global -> CN
+ */
 
-const axios = require('axios');
-const core = require('@actions/core');
-const BARK_KEY = process.env.BARK_KEY ?? BARK_KEY_DEFAULT;
+import { migrateGlobal2CN } from './services/sync';
+import { sendErrorNotification, sendSuccessNotification } from './services/notification';
+import { logger } from './utils/logger';
 
-try {
-    migrateGarminGlobal2GarminCN();
-} catch (e) {
-    axios.get(
-        `https://api.day.app/${BARK_KEY}/Garmin CN -> Garmin Global 同步数据运行失败了，快去检查！/${e.message}`);
-    core.setFailed(e.message);
-    throw new Error(e);
-}
+const main = async () => {
+  logger.info('========== 开始迁移 Global -> CN ==========');
 
+  try {
+    const result = await migrateGlobal2CN();
 
+    if (result.success) {
+      const message = `迁移完成: 成功 ${result.migrated} 条, 失败 ${result.failed} 条`;
+      await sendSuccessNotification('Garmin Global -> CN 迁移', message);
+    }
+  } catch (error) {
+    await sendErrorNotification('Garmin Global -> CN 迁移', error as Error);
+    process.exit(1);
+  }
 
+  logger.info('========== 迁移完成 ==========');
+};
 
+main();

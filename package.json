@@ -1,18 +1,16 @@
 {
   "name": "garmin-daily-sync",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": "Migrate, gather, synchronize your Garmin fitness data between China server and Global server.",
-  "main": "index.ts",
+  "main": "dist/index.js",
   "scripts": {
-    "test": "ts-node src/test.ts",
+    "build": "tsc",
+    "sync:cn2global": "ts-node src/sync_garmin_cn_to_global.ts",
+    "sync:global2cn": "ts-node src/sync_garmin_global_to_cn.ts",
+    "migrate:cn2global": "ts-node src/migrate_garmin_cn_to_global.ts",
+    "migrate:global2cn": "ts-node src/migrate_garmin_global_to_cn.ts",
     "rq": "ts-node src/rq.ts",
-    "sync_cn": "ts-node src/sync_garmin_cn_to_global.ts",
-    "sync_global": "ts-node src/sync_garmin_global_to_cn.ts",
-    "migrate_garmin_global_to_cn": "ts-node src/migrate_garmin_global_to_cn.ts",
-    "migrate_garmin_cn_to_global": "ts-node src/migrate_garmin_cn_to_global.ts",
-    "start2": "node dist/index.js",
-    "dev": "nodemon dist/index.js",
-    "dev2": "nodemon --exec ts-node src/rq.ts",
+    "test": "ts-node src/test.ts",
     "watch": "tsc -w"
   },
   "author": "yanzhitao",
@@ -20,27 +18,21 @@
   "dependencies": {
     "@actions/core": "^1.10.0",
     "@gooin/garmin-connect": "^1.6.1",
-    "axios": "^0.24.0",
-    "crypto-js": "^4.1.1",
+    "axios": "^1.6.0",
+    "crypto-js": "^4.2.0",
     "decompress": "^4.2.1",
-    "express": "^4.17.1",
-    "form-data": "^4.0.0",
-    "garmin-connect": "^1.4.3",
-    "google-auth-library": "^8.0.2",
-    "googleapis": "^100.0.0",
+    "google-auth-library": "^9.0.0",
+    "googleapis": "^128.0.0",
     "lodash": "^4.17.21",
-    "node-fetch": "^3.2.5",
-    "qs": "^6.10.3",
-    "sqlite": "^4.1.2",
-    "sqlite3": "^5.1.2",
-    "strava-v3": "^2.1.0",
-    "unzipper": "^0.10.11"
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.6"
   },
   "devDependencies": {
-    "@types/express": "^4.17.13",
-    "@types/node": "^16.6.2",
-    "nodemon": "^2.0.9",
-    "ts-node": "^10.0.0",
-    "typescript": "^4.3.5"
+    "@types/crypto-js": "^4.2.0",
+    "@types/decompress": "^4.2.7",
+    "@types/lodash": "^4.14.202",
+    "@types/node": "^20.10.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.2"
   }
 }

@@ -1,21 +1,23 @@
-import { BARK_KEY_DEFAULT } from './constant';
-import { doRQGoogleSheets } from './utils/runningquotient';
+/**
+ * RQ + Google Sheets 同步
+ */
 
-const axios = require('axios');
-const core = require('@actions/core');
+import { doRQGoogleSheets } from './services/rq-sync';
+import { sendErrorNotification, sendSuccessNotification } from './services/notification';
+import { logger } from './utils/logger';
 
-const BARK_KEY = process.env.BARK_KEY ?? BARK_KEY_DEFAULT;
+const main = async () => {
+  logger.info('========== 开始 RQ + Google Sheets 同步 ==========');
 
+  try {
+    await doRQGoogleSheets();
+    await sendSuccessNotification('RQ + Google Sheets', '同步完成');
+  } catch (error) {
+    await sendErrorNotification('RQ + Google Sheets 同步', error as Error);
+    process.exit(1);
+  }
 
-try {
-    doRQGoogleSheets();
-} catch (e) {
-    axios.get(
-        `https://api.day.app/${BARK_KEY}/同步数据运行失败了，快去检查！/${e.message}`);
-    core.setFailed(e.message);
-    throw new Error(e);
-}
+  logger.info('========== 同步完成 ==========');
+};
 
-
-
-
+main();

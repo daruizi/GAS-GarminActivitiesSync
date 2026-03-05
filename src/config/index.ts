@@ -1,0 +1,122 @@
+/**
+ * 配置模块 - 集中管理所有环境变量和配置
+ */
+
+// 区域类型
+export type GarminRegion = 'CN' | 'GLOBAL';
+
+// Garmin 账户配置
+export interface GarminAccountConfig {
+  username: string;
+  password: string;
+}
+
+// 从环境变量获取配置
+const getEnv = (key: string, defaultValue: string = ''): string => {
+  return process.env[key] ?? defaultValue;
+};
+
+// Garmin 配置
+export const GARMIN_CONFIG = {
+  // 中国区
+  CN: {
+    username: getEnv('GARMIN_USERNAME'),
+    password: getEnv('GARMIN_PASSWORD'),
+    domain: 'garmin.cn' as const,
+  },
+  // 国际区
+  GLOBAL: {
+    username: getEnv('GARMIN_GLOBAL_USERNAME'),
+    password: getEnv('GARMIN_GLOBAL_PASSWORD'),
+    domain: 'garmin.com' as const,
+  },
+  // 同步配置
+  sync: {
+    num: parseInt(getEnv('GARMIN_SYNC_NUM', '10'), 10),
+    delay: 1000,
+  },
+  // 迁移配置
+  migrate: {
+    num: parseInt(getEnv('GARMIN_MIGRATE_NUM', '200'), 10),
+    start: parseInt(getEnv('GARMIN_MIGRATE_START', '0'), 10),
+  },
+};
+
+// Garmin URL 配置
+export const GARMIN_URL = {
+  BASE_URL: 'https://connect.garmin.cn',
+  ACTIVITY_URL: 'https://connect.garmin.cn/modern/activity/',
+  SSO_URL_ORIGIN: 'https://sso.garmin.com',
+  SSO_URL: 'https://sso.garmin.cn/sso',
+  MODERN_URL: 'https://connect.garmin.cn/modern',
+  SIGNIN_URL: 'https://sso.garmin.cn/sso/signin',
+  CSS_URL: 'https://static.garmincdn.cn/cn.garmin.connect/ui/css/gauth-custom-v1.2-min.css',
+};
+
+// 文件配置
+export const FILE_CONFIG = {
+  SUFFIX: {
+    FIT: 'fit',
+    GPX: 'gpx',
+    TCX: 'tcx',
+  },
+  DOWNLOAD_DIR: './garmin_fit_files',
+  DB_FILE_PATH: './db/garmin.db',
+};
+
+// 数据库配置
+export const DB_CONFIG = {
+  filePath: FILE_CONFIG.DB_FILE_PATH,
+  aesKey: getEnv('AESKEY', 'LSKDAJALSD'),
+};
+
+// Google Sheets 配置
+export const GOOGLE_CONFIG = {
+  clientEmail: getEnv('GOOGLE_API_CLIENT_EMAIL'),
+  privateKey: getEnv('GOOGLE_API_PRIVATE_KEY').replace(/\\n/gm, '\n'),
+  sheetId: getEnv('GOOGLE_SHEET_ID'),
+  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+};
+
+// RunningQuotient 配置
+export const RQ_CONFIG = {
+  userId: getEnv('RQ_USERID'),
+  cookie: getEnv('RQ_COOKIE'),
+  csrfToken: getEnv('RQ_CSRF_TOKEN'),
+  host: 'https://www.runningquotient.cn/',
+  routes: {
+    LOGIN: '/user/login',
+    OVERVIEW: '/training/getOverView',
+    UPDATE: 'training/update-overview?userId=',
+  },
+  userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.64 Safari/537.36',
+};
+
+// Strava 配置
+export const STRAVA_CONFIG = {
+  accessToken: getEnv('STRAVA_ACCESS_TOKEN'),
+  clientId: getEnv('STRAVA_CLIENT_ID'),
+  clientSecret: getEnv('STRAVA_CLIENT_SECRET'),
+  redirectUri: getEnv('STRAVA_REDIRECT_URI'),
+};
+
+// Bark 通知配置
+export const BARK_CONFIG = {
+  key: getEnv('BARK_KEY'),
+  apiUrl: 'https://api.day.app',
+};
+
+// 获取 Garmin 账户配置
+export const getGarminAccountConfig = (region: GarminRegion): GarminAccountConfig => {
+  const config = GARMIN_CONFIG[region];
+  return {
+    username: config.username,
+    password: config.password,
+  };
+};
+
+// 验证配置
+export const validateConfig = (region: GarminRegion): boolean => {
+  const config = GARMIN_CONFIG[region];
+  return !!(config.username && config.password);
+};
