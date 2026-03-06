@@ -2,7 +2,7 @@
  * Garmin 客户端模块 - 统一处理 CN 和 Global 区域
  */
 
-import { GarminConnect } from '@gooin/garmin-connect';
+import { GarminConnect } from 'garmin-connect';
 import fs from 'fs';
 import decompress from 'decompress';
 import filter from 'lodash/filter';

@@ -6,7 +6,7 @@
 export type GarminRegion = 'CN' | 'GLOBAL';
 
 // Garmin 客户端类型（从 garmin-connect 库导入）
-import { GarminConnect } from '@gooin/garmin-connect';
+import { GarminConnect } from 'garmin-connect';
 export type GarminClient = InstanceType<typeof GarminConnect>;
 
 // 活动数据类型
