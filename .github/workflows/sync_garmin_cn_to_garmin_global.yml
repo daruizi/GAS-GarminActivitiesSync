@@ -11,6 +11,7 @@ on:
 
 env:
   # please change to your own config.
+  AESKEY: ${{ secrets.AESKEY }}
   RQ_COOKIE: ${{ secrets.RQ_COOKIE }}
   RQ_CSRF_TOKEN: ${{ secrets.RQ_CSRF_TOKEN }}
   RQ_USERID: ${{ secrets.RQ_USERID }}

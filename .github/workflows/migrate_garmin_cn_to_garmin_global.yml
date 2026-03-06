@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
 
 env:
+  AESKEY: ${{ secrets.AESKEY }}
   BARK_KEY: ${{ secrets.BARK_KEY }}
   GARMIN_USERNAME: ${{ secrets.GARMIN_USERNAME }}
   GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
