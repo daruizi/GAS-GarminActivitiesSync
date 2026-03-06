@@ -2,7 +2,7 @@
  * 同步服务模块
  */
 
-import _ from 'lodash';
+import reverse from 'lodash/reverse';
 import core from '@actions/core';
 
 import { createGarminClient, downloadActivity, uploadActivity } from '../clients/garmin';
@@ -42,7 +42,7 @@ export const syncActivities = async (
   }
 
   // 反转数组，从旧到新同步
-  const actsToSync = _.reverse([...sourceActs]);
+  const actsToSync = reverse([...sourceActs]);
   const syncedActivities: string[] = [];
   let count = 0;
 

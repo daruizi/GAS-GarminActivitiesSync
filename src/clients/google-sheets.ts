@@ -4,7 +4,7 @@
 
 import { JWT } from 'google-auth-library';
 import { google } from 'googleapis';
-import _ from 'lodash';
+import last from 'lodash/last';
 import core from '@actions/core';
 
 import { GOOGLE_CONFIG } from '../config';
@@ -63,7 +63,7 @@ export const getLatestSheetsData = async (): Promise<string[]> => {
       range: '工作表1!A1:AD',
     });
 
-    return _.last(response.data.values) ?? [];
+    return last(response.data.values) ?? [];
   } catch (error) {
     const message = `Google Sheets 读取失败: ${error}`;
     core.setFailed(message);

@@ -1,31 +1,31 @@
-dist
-node_modules
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Log files
 *.log
-garmin_fit_files
-./src/constant.my.ts
-
-# Virtual environment
-bin/
-include/
-lib/
-pyvenv.cfg
-
-.cache
-*.pyc
-node_modules
 yarn-error.log
 
-/public
-# Build directory
-/build
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Downloaded files
+garmin_fit_files/
+
+# Database
+db/*.db
+
+# IDE
+.idea/
+.vscode/
+
+# OS files
 .DS_Store
-.sass-cache/
-_posts/
-_site/
+Thumbs.db
 
-.mypy_cache
-
-/.vscode
-.idea
-
-config.yaml
+# Lock files (keep yarn.lock, ignore package-lock.json if using yarn)
+package-lock.json

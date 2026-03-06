@@ -5,7 +5,7 @@
 import { GarminConnect } from '@gooin/garmin-connect';
 import fs from 'fs';
 import decompress from 'decompress';
-import _ from 'lodash';
+import filter from 'lodash/filter';
 import core from '@actions/core';
 
 import { GARMIN_CONFIG, FILE_CONFIG, validateConfig, GARMIN_URL } from '../config';
@@ -131,7 +131,7 @@ export const getRunningStatistics = async (
   const acts = await client.getActivities(0, 10);
 
   // 筛选跑步类型活动
-  const runningAct = _.filter(acts, (act) =>
+  const runningAct = filter(acts, (act) =>
     act?.activityType?.typeKey?.includes('running')
   )[0];
 

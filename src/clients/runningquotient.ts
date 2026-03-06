@@ -3,7 +3,6 @@
  */
 
 import axios from 'axios';
-import _ from 'lodash';
 import core from '@actions/core';
 
 import { RQ_CONFIG } from '../config';

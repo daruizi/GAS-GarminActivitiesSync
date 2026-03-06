@@ -66,7 +66,7 @@ export const FILE_CONFIG = {
 // 数据库配置
 export const DB_CONFIG = {
   filePath: FILE_CONFIG.DB_FILE_PATH,
-  aesKey: getEnv('AESKEY', 'LSKDAJALSD'),
+  aesKey: getEnv('AESKEY'),
 };
 
 // Google Sheets 配置
