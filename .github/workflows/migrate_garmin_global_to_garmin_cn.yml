@@ -25,7 +25,7 @@ jobs:
           node-version: '18'
           cache: 'yarn'
       - run: yarn
-      - run: yarn migrate_garmin_global_to_cn
+      - run: yarn migrate:global2cn
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: Save Garmin Session

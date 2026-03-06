@@ -36,7 +36,7 @@ jobs:
           node-version: '18'
           cache: 'yarn'
       - run: yarn
-      - run: yarn sync_cn
+      - run: yarn sync:cn2global
         timeout-minutes: 5
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:

@@ -43,7 +43,7 @@ jobs:
           
       - run: yarn
       
-      - run: yarn sync_global
+      - run: yarn sync:global2cn
         timeout-minutes: 5
         
       - uses: stefanzweifel/git-auto-commit-action@v5
