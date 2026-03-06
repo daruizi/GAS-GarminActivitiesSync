@@ -23,24 +23,22 @@ export const encrypt = (data: Record<string, unknown>): string => {
   const str = JSON.stringify(data);
   return CryptoJS.AES.encrypt(str, DB_CONFIG.aesKey).toString();
 };
-
 /**
  * 解密数据
  */
 export const decrypt = <T = Record<string, unknown>>(encryptedStr: string): T => {
   checkAESKey();
-
   try {
     const bytes = CryptoJS.AES.decrypt(encryptedStr, DB_CONFIG.aesKey);
     const str = bytes.toString(CryptoJS.enc.Utf8);
-
     if (!str) {
       throw new Error('解密失败：数据为空或密钥错误');
     }
-
     return JSON.parse(str) as T;
   } catch (error) {
-    logger.error('解密失败', error);
-    throw new Error(`解密失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    // 移除 logger.error(error) 以避免在日志中打印红色的错误堆栈
+    // 外层的 getSession 捕获到 Error 后会自动执行降级(重新登录)逻辑
+    throw new Error('缓存解密失败(密钥已变更或数据损坏)，将重新登录');
   }
+};
 };
