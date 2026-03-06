@@ -6,7 +6,7 @@ import { GarminConnect } from 'garmin-connect';
 import fs from 'fs';
 import decompress from 'decompress';
 import filter from 'lodash/filter';
-import core from '@actions/core';
+import * as core from '@actions/core';
 
 import { GARMIN_CONFIG, FILE_CONFIG, validateConfig, GARMIN_URL } from '../config';
 import { GarminRegion, GarminClient, GarminActivity, GarminUserInfo, RunningStatistics } from '../types';

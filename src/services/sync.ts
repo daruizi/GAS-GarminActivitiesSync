@@ -3,7 +3,7 @@
  */
 
 import reverse from 'lodash/reverse';
-import core from '@actions/core';
+import * as core from '@actions/core';
 
 import { createGarminClient, downloadActivity, uploadActivity } from '../clients/garmin';
 import { GARMIN_CONFIG } from '../config';

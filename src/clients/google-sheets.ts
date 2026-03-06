@@ -5,7 +5,7 @@
 import { JWT } from 'google-auth-library';
 import { google } from 'googleapis';
 import last from 'lodash/last';
-import core from '@actions/core';
+import * as core from '@actions/core';
 
 import { GOOGLE_CONFIG } from '../config';
 import { logger } from '../utils/logger';

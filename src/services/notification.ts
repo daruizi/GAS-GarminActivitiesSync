@@ -3,7 +3,7 @@
  */
 
 import axios from 'axios';
-import core from '@actions/core';
+import * as core from '@actions/core';
 
 import { BARK_CONFIG } from '../config';
 import { logger } from '../utils/logger';

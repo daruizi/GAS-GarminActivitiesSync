@@ -3,7 +3,7 @@
  */
 
 import axios from 'axios';
-import core from '@actions/core';
+import * as core from '@actions/core';
 
 import { RQ_CONFIG } from '../config';
 import { RQData } from '../types';
