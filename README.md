@@ -2,13 +2,6 @@
 
 ![workflow](./assets/workflow.png)
 
-<a style="display:inline-block;background-color:#FC5200;color:#fff;padding:5px 10px 5px 30px;font-size:11px;font-family:Helvetica, Arial, sans-serif;white-space:nowrap;text-decoration:none;background-repeat:no-repeat;background-position:10px center;border-radius:3px;background-image:url('https://badges.strava.com/logo-strava-echelon.png')" href='https://www.strava.com/athletes/37141473' target="_clean">
-  关注作者 Strava
-  <img src='https://badges.strava.com/logo-strava.png' alt='Strava' style='margin-left:2px;vertical-align:text-bottom' height=13 width=51 />
-</a>
-
-[![](https://img.shields.io/badge/-Telegram-%2326A5E4?style=flat-square&logo=telegram&logoColor=ffffff)](https://t.me/garmindailysync)
-
 ---
 
 ## 目录
@@ -361,16 +354,6 @@ schedule:
 本工具仅限用于学习和研究目的，不得用于商业或非法用途。使用本工具所产生的任何后果由用户自行承担。
 
 账号密码保存在你自己的 GitHub Secrets 中，代码完全开源，欢迎提交 PR。
-
----
-
-## 其他资源
-
-- **Web 版本**：[https://dailysync.vyzt.dev/](https://dailysync.vyzt.dev/)
-- **GitLab 备份**：[https://gitlab.com/gooin/dailysync](https://gitlab.com/gooin/dailysync)
-- **Telegram 群组**：[https://t.me/garmindailysync](https://t.me/garmindailysync)
-- **视频教程**：[Bilibili](https://www.bilibili.com/video/BV1v94y1Q7oR/)
-- **账号准备文档**：[点击查看](https://dailysync.vyzt.dev/docs/%E8%B4%A6%E5%8F%B7%E5%87%86%E5%A4%87)
 
 ---
 
