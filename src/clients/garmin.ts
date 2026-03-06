@@ -56,7 +56,7 @@ export const createGarminClient = async (region: GarminRegion): Promise<GarminCl
       // Session 失效，重新登录
       logger.warn(`${region}: Session 已失效，重新登录...`);
       await client.login(config.username, config.password);
-      await updateSession(region, client.sessionJson);
+      await updateSession(region, client.exportToken());
     }
   }
 
@@ -175,16 +175,16 @@ export const getRunningStatistics = async (
     averageHR,
     maxHR,
     averageRunningCadenceInStepsPerMinute,
-    aerobicTrainingEffect,
-    anaerobicTrainingEffect,
-    avgGroundContactTime,
+    aerobicTrainingEffect: aerobicTrainingEffect as number | undefined,
+    anaerobicTrainingEffect: anaerobicTrainingEffect as number | undefined,
+    avgGroundContactTime: avgGroundContactTime as number | undefined,
     avgStrideLength,
     vO2MaxValue,
-    avgVerticalOscillation,
-    avgVerticalRatio,
-    avgGroundContactBalance,
-    trainingEffectLabel,
-    activityTrainingLoad,
+    avgVerticalOscillation: avgVerticalOscillation as number | undefined,
+    avgVerticalRatio: avgVerticalRatio as number | undefined,
+    avgGroundContactBalance: avgGroundContactBalance as number | undefined,
+    trainingEffectLabel: trainingEffectLabel as string | undefined,
+    activityTrainingLoad: activityTrainingLoad as number | undefined,
     activityURL: GARMIN_URL.ACTIVITY_URL + activityId,
   };
 };

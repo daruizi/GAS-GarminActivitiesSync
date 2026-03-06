@@ -52,7 +52,7 @@ export const saveSession = async (
 ): Promise<void> => {
   const db = await getDB();
   const username = GARMIN_CONFIG[region].username;
-  const encryptedSession = encrypt(session as Record<string, unknown>);
+  const encryptedSession = encrypt(session as unknown as Record<string, unknown>);
 
   await db.run(
     'INSERT INTO garmin_session (user, region, session) VALUES (?, ?, ?)',
@@ -73,7 +73,7 @@ export const updateSession = async (
 ): Promise<void> => {
   const db = await getDB();
   const username = GARMIN_CONFIG[region].username;
-  const encryptedSession = encrypt(session as Record<string, unknown>);
+  const encryptedSession = encrypt(session as unknown as Record<string, unknown>);
 
   await db.run(
     'UPDATE garmin_session SET session = ? WHERE user = ? AND region = ?',

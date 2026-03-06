@@ -2,8 +2,7 @@
  * 配置模块 - 集中管理所有环境变量和配置
  */
 
-// 区域类型
-export type GarminRegion = 'CN' | 'GLOBAL';
+import { GarminRegion } from '../types';
 
 // Garmin 账户配置
 export interface GarminAccountConfig {

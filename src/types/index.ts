@@ -42,10 +42,29 @@ export interface GarminUserInfo {
   location?: string;
 }
 
-// Session 数据类型
+// Session 数据类型 - 定义 OAuth token 结构
+export interface Oauth1Token {
+  oauth_token: string;
+  oauth_token_secret: string;
+}
+
+export interface Oauth2Token {
+  scope: string;
+  jti: string;
+  access_token: string;
+  token_type: string;
+  refresh_token: string;
+  expires_in: number;
+  refresh_token_expires_in: number;
+  expires_at: number;
+  refresh_token_expires_at: number;
+  last_update_date: string;
+  expires_date: string;
+}
+
 export interface SessionData {
-  oauth1: string;
-  oauth2: string;
+  oauth1: Oauth1Token;
+  oauth2: Oauth2Token;
 }
 
 // 数据库 Session 记录
