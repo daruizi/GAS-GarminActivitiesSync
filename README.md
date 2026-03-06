@@ -2,6 +2,11 @@
 
 ![workflow](./assets/workflow.png)
 
+<a style="display:inline-block;background-color:#FC5200;color:#fff;padding:5px 10px 5px 30px;font-size:11px;font-family:Helvetica, Arial, sans-serif;white-space:nowrap;text-decoration:none;background-repeat:no-repeat;background-position:10px center;border-radius:3px;background-image:url('https://badges.strava.com/logo-strava-echelon.png')" href='https://www.strava.com/athletes/37141473' target="_clean">
+  关注作者 Strava
+  <img src='https://badges.strava.com/logo-strava.png' alt='Strava' style='margin-left:2px;vertical-align:text-bottom' height=13 width=51 />
+</a>
+
 ---
 
 ## 目录
@@ -285,12 +290,14 @@ GarminActivitiesSync/
 │   │   ├── database.ts     # SQLite 数据库
 │   │   ├── crypto.ts       # 加密工具
 │   │   ├── logger.ts       # 日志工具
-│   │   └── format.ts       # 格式化工具
+│   │   ├── format.ts       # 格式化工具
+│   │   └── runner.ts       # 任务运行器
 │   ├── config/             # 配置管理
 │   ├── types/              # TypeScript 类型定义
 │   └── index.ts            # 入口文件
 ├── db/                     # SQLite 数据库文件
 ├── .env                    # 环境变量配置
+├── .env.example            # 环境变量示例
 ├── docker-compose.yml      # Docker Compose 配置
 ├── Dockerfile              # Docker 镜像构建
 ├── package.json            # 项目依赖
