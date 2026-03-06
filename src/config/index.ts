@@ -41,15 +41,9 @@ export const GARMIN_CONFIG = {
   },
 };
 
-// Garmin URL 配置
+// Garmin URL 配置（仅保留使用的属性）
 export const GARMIN_URL = {
-  BASE_URL: 'https://connect.garmin.cn',
   ACTIVITY_URL: 'https://connect.garmin.cn/modern/activity/',
-  SSO_URL_ORIGIN: 'https://sso.garmin.com',
-  SSO_URL: 'https://sso.garmin.cn/sso',
-  MODERN_URL: 'https://connect.garmin.cn/modern',
-  SIGNIN_URL: 'https://sso.garmin.cn/sso/signin',
-  CSS_URL: 'https://static.garmincdn.cn/cn.garmin.connect/ui/css/gauth-custom-v1.2-min.css',
 };
 
 // 文件配置
@@ -89,14 +83,6 @@ export const RQ_CONFIG = {
     UPDATE: 'training/update-overview?userId=',
   },
   userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.64 Safari/537.36',
-};
-
-// Strava 配置
-export const STRAVA_CONFIG = {
-  accessToken: getEnv('STRAVA_ACCESS_TOKEN'),
-  clientId: getEnv('STRAVA_CLIENT_ID'),
-  clientSecret: getEnv('STRAVA_CLIENT_SECRET'),
-  redirectUri: getEnv('STRAVA_REDIRECT_URI'),
 };
 
 // Bark 通知配置

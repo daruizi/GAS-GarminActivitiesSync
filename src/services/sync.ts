@@ -3,11 +3,10 @@
  */
 
 import reverse from 'lodash/reverse';
-import * as core from '@actions/core';
 
 import { createGarminClient, downloadActivity, uploadActivity } from '../clients/garmin';
 import { GARMIN_CONFIG } from '../config';
-import { GarminRegion, GarminClient, SyncResult, MigrateResult } from '../types';
+import { GarminRegion, SyncResult, MigrateResult } from '../types';
 import { logger } from '../utils/logger';
 import { number2capital, delay } from '../utils/format';
 

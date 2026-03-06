@@ -10,7 +10,6 @@
     "migrate:cn2global": "ts-node src/migrate_garmin_cn_to_global.ts",
     "migrate:global2cn": "ts-node src/migrate_garmin_global_to_cn.ts",
     "rq": "ts-node src/rq.ts",
-    "test": "ts-node src/test.ts",
     "watch": "tsc -w"
   },
   "author": "yanzhitao",
