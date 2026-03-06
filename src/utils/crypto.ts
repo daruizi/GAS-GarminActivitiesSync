@@ -41,4 +41,3 @@ export const decrypt = <T = Record<string, unknown>>(encryptedStr: string): T =>
     throw new Error('缓存解密失败(密钥已变更或数据损坏)，将重新登录');
   }
 };
-};
