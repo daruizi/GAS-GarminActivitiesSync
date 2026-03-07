@@ -96,6 +96,19 @@ export const syncActivities = async (
       // 记录已同步的活动 ID
       await saveSyncedActivity(act.activityId, sourceRegion, targetRegion);
       syncedActivities.push(act.activityName);
+    } catch (error) {
+      const errMsg = String(error);
+      // 409 Conflict 表示活动在目标端已存在，标记为已同步并继续
+      if (errMsg.includes('409') || errMsg.includes('Conflict')) {
+        logger.warn(
+          `活动 [${act.activityName}] 在目标端已存在（409 Conflict），标记为已同步`
+        );
+        await saveSyncedActivity(act.activityId, sourceRegion, targetRegion);
+        syncedActivities.push(act.activityName);
+      } else {
+        // 其他错误仍然抛出
+        throw error;
+      }
     } finally {
       // 无论成功失败，都清理临时文件
       if (filePath) {
@@ -188,10 +201,19 @@ export const migrateActivities = async (
         sourceActs.length
       );
     } catch (error) {
-      failed++;
-      const errMsg = `迁移失败: ${act.activityName} - ${error}`;
-      errors.push(errMsg);
-      logger.error(errMsg);
+      const errMsg = String(error);
+      // 409 Conflict 表示活动已存在，视为成功
+      if (errMsg.includes('409') || errMsg.includes('Conflict')) {
+        logger.warn(
+          `活动 [${act.activityName}] 在目标端已存在（409 Conflict），跳过`
+        );
+        migrated++;
+      } else {
+        failed++;
+        const errorLog = `迁移失败: ${act.activityName} - ${error}`;
+        errors.push(errorLog);
+        logger.error(errorLog);
+      }
 
       // 即使失败也保存进度，避免重复处理
       await saveMigrationProgress(
