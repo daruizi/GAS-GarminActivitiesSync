@@ -25,7 +25,7 @@ export const checkAESKey = (): void => {
   const hasLower = /[a-z]/.test(key);
   const hasUpper = /[A-Z]/.test(key);
   const hasNumber = /[0-9]/.test(key);
-  const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(key);
+  const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(key);
 
   const complexityCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
 
@@ -54,7 +54,7 @@ export const decrypt = <T = Record<string, unknown>>(encryptedStr: string): T =>
       throw new Error('解密失败：数据为空或密钥错误');
     }
     return JSON.parse(str) as T;
-  } catch (error) {
+  } catch {
     // 移除 logger.error(error) 以避免在日志中打印红色的错误堆栈
     // 外层的 getSession 捕获到 Error 后会自动执行降级(重新登录)逻辑
     throw new Error('缓存解密失败(密钥已变更或数据损坏)，将重新登录');

@@ -9,7 +9,7 @@ import decompress from 'decompress';
 import * as core from '@actions/core';
 
 import { GARMIN_CONFIG, FILE_CONFIG, validateConfig, GARMIN_URL } from '../config';
-import { GarminRegion, GarminClient, GarminActivity, GarminUserInfo, RunningStatistics } from '../types';
+import { GarminRegion, GarminClient, RunningStatistics } from '../types';
 import { getSession, saveSession, updateSession } from '../utils/database';
 import { logger } from '../utils/logger';
 import { formatPace } from '../utils/format';
@@ -84,7 +84,9 @@ export const createGarminClient = async (region: GarminRegion): Promise<GarminCl
   );
 
   // 配置 axios 超时时间
-  const axiosClient = (client as unknown as { client: { client: { defaults: { timeout: number } } } })?.client?.client;
+  const axiosClient = (
+    client as unknown as { client: { client: { defaults: { timeout: number } } } }
+  )?.client?.client;
   if (axiosClient?.defaults) {
     axiosClient.defaults.timeout = GARMIN_CONFIG.timeout || 30000;
     logger.debug(`已设置请求超时: ${GARMIN_CONFIG.timeout || 30000}ms`);
@@ -166,10 +168,7 @@ export const downloadActivity = async (
 /**
  * 上传活动数据
  */
-export const uploadActivity = async (
-  filePath: string,
-  client: GarminClient
-): Promise<void> => {
+export const uploadActivity = async (filePath: string, client: GarminClient): Promise<void> => {
   try {
     // 使用速率限制器控制上传频率
     const result = await defaultRateLimiter.executeWithRateLimit(() =>
@@ -185,15 +184,11 @@ export const uploadActivity = async (
 /**
  * 获取跑步统计数据
  */
-export const getRunningStatistics = async (
-  client: GarminClient
-): Promise<RunningStatistics> => {
+export const getRunningStatistics = async (client: GarminClient): Promise<RunningStatistics> => {
   const acts = await client.getActivities(0, 10);
 
   // 筛选跑步类型活动
-  const runningAct = acts.filter((act) =>
-    act?.activityType?.typeKey?.includes('running')
-  )[0];
+  const runningAct = acts.filter(act => act?.activityType?.typeKey?.includes('running'))[0];
 
   if (!runningAct) {
     throw new Error('未找到跑步活动');

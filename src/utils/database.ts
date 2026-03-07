@@ -67,10 +67,7 @@ export const initDB = async (): Promise<void> => {
 /**
  * 保存 Session 到数据库
  */
-export const saveSession = async (
-  region: GarminRegion,
-  session: SessionData
-): Promise<void> => {
+export const saveSession = async (region: GarminRegion, session: SessionData): Promise<void> => {
   const db = await getDB();
   const username = GARMIN_CONFIG[region].username;
   const encryptedSession = encrypt(session as unknown as Record<string, unknown>);
@@ -88,10 +85,7 @@ export const saveSession = async (
 /**
  * 更新 Session
  */
-export const updateSession = async (
-  region: GarminRegion,
-  session: SessionData
-): Promise<void> => {
+export const updateSession = async (region: GarminRegion, session: SessionData): Promise<void> => {
   const db = await getDB();
   const username = GARMIN_CONFIG[region].username;
   const encryptedSession = encrypt(session as unknown as Record<string, unknown>);
@@ -125,15 +119,12 @@ export const getSession = async (region: GarminRegion): Promise<SessionData | nu
 
   try {
     return decrypt<SessionData>(result.session);
-  } catch (error) {
+  } catch {
     logger.warn(`Session 解密失败: ${region}，将清理旧数据并重新登录`);
 
     // 清理解密失败的旧 Session 记录
     if (result.id) {
-      await db.run(
-        'DELETE FROM garmin_session WHERE id = ?',
-        result.id
-      );
+      await db.run('DELETE FROM garmin_session WHERE id = ?', result.id);
       logger.debug(`已清理无效的 Session 记录 (ID: ${result.id})`);
     }
 

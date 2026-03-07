@@ -63,7 +63,8 @@ const rotateLogFile = (filePath: string): void => {
 
 // 清理旧日志文件
 const cleanOldLogFiles = (): void => {
-  const files = fs.readdirSync(LOG_CONFIG.logDir)
+  const files = fs
+    .readdirSync(LOG_CONFIG.logDir)
     .filter(f => f.startsWith('garmin-sync-') && f.endsWith('.log'))
     .sort()
     .reverse();
@@ -94,7 +95,7 @@ const writeToFile = (level: LogLevel, message: string, ...args: unknown[]): void
     };
 
     const logLine = JSON.stringify(logEntry) + '\n';
-    fs.appendFile(filePath, logLine, 'utf-8', (err) => {
+    fs.appendFile(filePath, logLine, 'utf-8', err => {
       if (err) {
         console.error('日志文件写入失败:', err);
       }
@@ -106,13 +107,13 @@ const writeToFile = (level: LogLevel, message: string, ...args: unknown[]): void
 };
 
 // 格式化控制台消息
-const formatConsoleMessage = (level: LogLevel, message: string, ...args: unknown[]): string => {
+const formatConsoleMessage = (level: LogLevel, message: string, ..._args: unknown[]): string => {
   const timestamp = formatTime();
   const levelColors: Record<LogLevel, string> = {
-    info: '\x1b[36m',    // cyan
-    warn: '\x1b[33m',    // yellow
-    error: '\x1b[31m',   // red
-    debug: '\x1b[90m',   // gray
+    info: '\x1b[36m', // cyan
+    warn: '\x1b[33m', // yellow
+    error: '\x1b[31m', // red
+    debug: '\x1b[90m', // gray
     success: '\x1b[32m', // green
   };
   const reset = '\x1b[0m';

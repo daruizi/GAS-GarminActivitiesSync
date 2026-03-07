@@ -5,41 +5,17 @@
 import { z } from 'zod';
 
 /**
- * Garmin 账户配置 Schema
- */
-const GarminAccountSchema = z.object({
-  username: z.string().email('请输入有效的邮箱地址').min(1, '用户名不能为空'),
-  password: z.string().min(6, '密码长度至少 6 个字符'),
-});
-
-/**
- * 同步配置 Schema
- */
-const SyncConfigSchema = z.object({
-  num: z.number().int().min(1).max(50).default(10),
-  delay: z.number().int().min(500).max(10000).default(1000),
-});
-
-/**
- * 迁移配置 Schema
- */
-const MigrateConfigSchema = z.object({
-  num: z.number().int().min(1).max(500).default(100),
-  start: z.number().int().min(0).default(0),
-});
-
-/**
  * AES 密钥验证 Schema
  */
 const AESKeySchema = z
   .string()
   .min(16, 'AES 密钥长度至少 16 个字符')
   .refine(
-    (key) => {
+    key => {
       const hasLower = /[a-z]/.test(key);
       const hasUpper = /[A-Z]/.test(key);
       const hasNumber = /[0-9]/.test(key);
-      const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(key);
+      const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(key);
       return [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length >= 2;
     },
     { message: 'AES 密钥应包含大小写字母、数字和特殊字符中的至少两种' }
@@ -98,14 +74,14 @@ export const validateAESKey = (key: string | undefined): ValidationResult => {
 
   const result = AESKeySchema.safeParse(key);
   if (!result.success) {
-    errors.push(...result.error.errors.map((e) => e.message));
+    errors.push(...result.error.errors.map(e => e.message));
   }
 
   // 检查密钥复杂度
   const hasLower = /[a-z]/.test(key);
   const hasUpper = /[A-Z]/.test(key);
   const hasNumber = /[0-9]/.test(key);
-  const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(key);
+  const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(key);
   const complexityCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
 
   if (complexityCount < 3) {
@@ -149,7 +125,10 @@ export const validateNotificationConfig = (
   }
 
   // 验证企业微信 Webhook URL 格式
-  if (wecomWebhookUrl && !wecomWebhookUrl.startsWith('https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=')) {
+  if (
+    wecomWebhookUrl &&
+    !wecomWebhookUrl.startsWith('https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=')
+  ) {
     warnings.push('企业微信 Webhook URL 格式可能不正确');
   }
 
@@ -179,7 +158,11 @@ export const validateAllConfig = (config: {
 
   // 验证 Garmin 账户
   const cnResult = validateGarminAccount(config.garminUsername, config.garminPassword, 'CN');
-  const globalResult = validateGarminAccount(config.garminGlobalUsername, config.garminGlobalPassword, 'GLOBAL');
+  const globalResult = validateGarminAccount(
+    config.garminGlobalUsername,
+    config.garminGlobalPassword,
+    'GLOBAL'
+  );
 
   allErrors.push(...cnResult.errors, ...globalResult.errors);
   allWarnings.push(...cnResult.warnings, ...globalResult.warnings);

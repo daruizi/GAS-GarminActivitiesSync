@@ -424,9 +424,10 @@ schedule:
 - 无感持久化：Actions 中使用 `actions/cache` 管理 Session 和数据库，移除旧版需要 push commit 的高危操作
 
 **代码与质量：**
-- 去除 `lodash` 强依赖，减小包体积
-- 完善 `number2capital` 算法支持中文多位制
-- 增加针对数据库、同步重试和通知渠道的单元测试，完善测试覆盖 (`vitest` 测试通过)
+- 零警告：移除 `lodash` 强依赖并清理过时废弃变量，减小包体积并提高可维护性
+- 规范升级：迁移 ESLint 至最新的 `eslint.config.mjs` Flat Config 标准，修复 pre-commit hook 在 v9 环境下失效导致的拦截 bug (DX提升)
+- 算法优化：完善 `number2capital` 算法支持中文多位制
+- 测试驱动：增加针对数据库、同步重试和通知渠道的单元测试，完善测试覆盖 (`vitest` 测试通过)
 
 ### v2.2.0 (2026-03-07)
 
