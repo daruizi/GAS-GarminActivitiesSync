@@ -21,6 +21,7 @@ export const getRQOverView = async (): Promise<RQData> => {
   try {
     const res = await axios(url, {
       method: 'post',
+      timeout: 30000, // 30 秒超时
       headers: {
         accept: 'application/json, text/javascript, */*; q=0.01',
         'accept-language': 'zh-CN,zh;q=0.9,zh-TW;q=0.8,en;q=0.7,la;q=0.6,ja;q=0.5',

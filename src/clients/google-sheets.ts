@@ -26,6 +26,39 @@ const getSheetsClient = async () => {
   });
 };
 
+// 默认超时配置
+const DEFAULT_TIMEOUT = 30000; // 30 秒
+
+/**
+ * 带超时和重试的 API 调用包装器
+ */
+const withTimeoutAndRetry = async <T>(
+  fn: () => Promise<T>,
+  timeout: number = DEFAULT_TIMEOUT,
+  maxRetries: number = 3
+): Promise<T> => {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      const result = await fn();
+      clearTimeout(timeoutId);
+      return result;
+    } catch (error) {
+      lastError = error as Error;
+      if (attempt < maxRetries) {
+        logger.warn(`API 调用失败，第 ${attempt} 次重试...`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
+  }
+
+  throw lastError;
+};
+
 /**
  * 插入数据到 Sheets
  */
@@ -33,14 +66,16 @@ export const insertDataToSheets = async (data: unknown[]): Promise<void> => {
   const sheets = await getSheetsClient();
 
   try {
-    const response = await sheets.spreadsheets.values.append({
-      spreadsheetId: GOOGLE_CONFIG.sheetId,
-      range: '工作表1!A1:AD',
-      valueInputOption: 'USER_ENTERED',
-      requestBody: {
-        values: [data],
-      },
-    });
+    const response = await withTimeoutAndRetry(() =>
+      sheets.spreadsheets.values.append({
+        spreadsheetId: GOOGLE_CONFIG.sheetId,
+        range: '工作表1!A1:AD',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [data],
+        },
+      }).then(r => r)
+    );
 
     logger.success('数据已写入 Google Sheets');
     logger.debug('写入结果', response.data);
@@ -58,10 +93,12 @@ export const getLatestSheetsData = async (): Promise<string[]> => {
   const sheets = await getSheetsClient();
 
   try {
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: GOOGLE_CONFIG.sheetId,
-      range: '工作表1!A1:AD',
-    });
+    const response = await withTimeoutAndRetry(() =>
+      sheets.spreadsheets.values.get({
+        spreadsheetId: GOOGLE_CONFIG.sheetId,
+        range: '工作表1!A1:AD',
+      }).then(r => r)
+    );
 
     return last(response.data.values) ?? [];
   } catch (error) {

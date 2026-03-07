@@ -93,7 +93,7 @@ export const getSession = async (region: GarminRegion): Promise<SessionData | nu
   const username = GARMIN_CONFIG[region].username;
 
   const result = await db.get(
-    'SELECT session FROM garmin_session WHERE user = ? AND region = ?',
+    'SELECT session, id FROM garmin_session WHERE user = ? AND region = ?',
     username,
     region
   );
@@ -104,8 +104,18 @@ export const getSession = async (region: GarminRegion): Promise<SessionData | nu
 
   try {
     return decrypt<SessionData>(result.session);
-  } catch {
-    logger.warn(`Session 解密失败: ${region}`);
+  } catch (error) {
+    logger.warn(`Session 解密失败: ${region}，将清理旧数据并重新登录`);
+
+    // 清理解密失败的旧 Session 记录
+    if (result.id) {
+      await db.run(
+        'DELETE FROM garmin_session WHERE id = ?',
+        result.id
+      );
+      logger.debug(`已清理无效的 Session 记录 (ID: ${result.id})`);
+    }
+
     return null;
   }
 };
