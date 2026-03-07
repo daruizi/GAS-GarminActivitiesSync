@@ -2,9 +2,6 @@
  * RQ 数据同步服务
  */
 
-import assign from 'lodash/assign';
-import values from 'lodash/values';
-
 import { createGarminClient, getRunningStatistics } from '../clients/garmin';
 import { getRQOverView } from '../clients/runningquotient';
 import { getLatestActivityIdInSheets, insertDataToSheets } from '../clients/google-sheets';
@@ -24,7 +21,7 @@ export const doRQGoogleSheets = async (): Promise<void> => {
   const garminStats = await getRunningStatistics(clientCN);
 
   // 合并数据
-  const data = assign(rqResult, garminStats);
+  const data = Object.assign({}, rqResult, garminStats);
   logger.info('合并数据完成', data);
 
   // 检查是否需要更新
@@ -37,7 +34,7 @@ export const doRQGoogleSheets = async (): Promise<void> => {
   }
 
   // 写入 Google Sheets
-  const finalResult = values(data);
+  const finalResult = Object.values(data);
   await insertDataToSheets(finalResult);
 
   logger.success('RQ + Google Sheets 同步完成');

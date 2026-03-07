@@ -9,7 +9,7 @@ on:
     branches:
       - main
 
-# 并发控制：如果当前有任务正在运行，取消旧任务或排队，防止 Git push 冲突
+# 并发控制：如果当前有任务正在运行，取消旧任务或排队，防止冲突
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -38,8 +38,6 @@ jobs:
     name: Sync Garmin CN to Garmin Global
     # 增加 Job 级别的超时限制，防止意外卡死消耗资源
     timeout-minutes: 15
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -48,11 +46,16 @@ jobs:
           node-version: "20"
           cache: "yarn"
 
+      # 从缓存恢复 Session 数据库
+      - name: Restore Session Cache
+        uses: actions/cache@v4
+        with:
+          path: db/garmin.db
+          key: garmin-session-${{ github.repository }}-cn2global
+          restore-keys: |
+            garmin-session-${{ github.repository }}-cn2global
+
       - run: yarn
 
       - run: yarn sync:cn2global
         timeout-minutes: 5
-
-      - uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: Save Garmin Session

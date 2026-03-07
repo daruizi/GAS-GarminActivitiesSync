@@ -2,8 +2,6 @@
  * 同步服务模块
  */
 
-import reverse from 'lodash/reverse';
-
 import {
   createGarminClient,
   downloadActivity,
@@ -15,53 +13,25 @@ import { GARMIN_CONFIG } from '../config';
 import { GarminRegion, SyncResult, MigrateResult } from '../types';
 import { logger } from '../utils/logger';
 import { number2capital, delay } from '../utils/format';
+import { withRetry } from '../utils/retry';
+import {
+  getSyncedActivityIds,
+  saveSyncedActivity,
+  getMigrationProgress,
+  saveMigrationProgress,
+} from '../utils/database';
 
 /**
  * 重试配置
  */
 const RETRY_CONFIG = {
   maxRetries: 3,
-  baseDelay: 2000, // 基础延迟 2 秒
-  maxDelay: 10000, // 最大延迟 10 秒
+  baseDelay: 2000,
+  maxDelay: 10000,
 };
 
 /**
- * 带重试的异步操作
- * @param fn 要执行的异步函数
- * @param maxRetries 最大重试次数
- * @param context 上下文信息（用于日志）
- */
-export const withRetry = async <T>(
-  fn: () => Promise<T>,
-  maxRetries: number = RETRY_CONFIG.maxRetries,
-  context?: string
-): Promise<T> => {
-  let lastError: Error | null = null;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error as Error;
-      const delayMs = Math.min(
-        RETRY_CONFIG.baseDelay * Math.pow(2, attempt - 1),
-        RETRY_CONFIG.maxDelay
-      );
-
-      if (attempt < maxRetries) {
-        logger.warn(
-          `${context ? `[${context}] ` : ''}第 ${attempt} 次尝试失败，${delayMs / 1000} 秒后重试: ${lastError.message}`
-        );
-        await delay(delayMs);
-      }
-    }
-  }
-
-  throw lastError;
-};
-
-/**
- * 同步活动数据
+ * 同步活动数据（基于 activityId 去重）
  * @param sourceRegion 源区域
  * @param targetRegion 目标区域
  */
@@ -77,58 +47,64 @@ export const syncActivities = async (
 
   // 获取源区域活动
   const sourceActs = await sourceClient.getActivities(0, syncNum);
-  // 获取目标区域最新活动
-  const targetActs = await targetClient.getActivities(0, 1);
 
-  const latestTargetActTime = targetActs[0]?.startTimeLocal ?? '0';
-  const latestSourceActTime = sourceActs[0]?.startTimeLocal ?? '0';
-
-  // 检查是否有新活动
-  if (latestSourceActTime === latestTargetActTime) {
-    const message = `没有要同步的活动，最近的活动: [${sourceActs[0].activityName}]，开始于: [${latestSourceActTime}]`;
+  if (sourceActs.length === 0) {
+    const message = '源区域没有活动数据';
     logger.info(message);
     return { success: true, count: 0, message };
   }
 
-  // 反转数组，从旧到新同步
-  const actsToSync = reverse([...sourceActs]);
+  // 从数据库获取已同步的活动 ID 集合
+  const syncedIds = await getSyncedActivityIds(sourceRegion, targetRegion);
+
+  // 筛选未同步的活动（反转为从旧到新）
+  const actsToSync = [...sourceActs]
+    .reverse()
+    .filter((act) => !syncedIds.has(act.activityId));
+
+  if (actsToSync.length === 0) {
+    const message = `没有要同步的活动，最近的活动: [${sourceActs[0].activityName}]，开始于: [${sourceActs[0].startTimeLocal}]`;
+    logger.info(message);
+    return { success: true, count: 0, message };
+  }
+
   const syncedActivities: string[] = [];
   let count = 0;
 
   for (const act of actsToSync) {
-    if (act.startTimeLocal > latestTargetActTime) {
-      count++;
-      logger.info(
-        `同步第 ${number2capital(count)} 条: [${act.activityName}]，开始于 [${act.startTimeLocal}]`
+    count++;
+    logger.info(
+      `同步第 ${number2capital(count)} 条: [${act.activityName}]，开始于 [${act.startTimeLocal}]`
+    );
+
+    let filePath = '';
+
+    try {
+      // 使用统一重试机制下载并上传
+      filePath = await withRetry(
+        () => downloadActivity(act.activityId, sourceClient),
+        RETRY_CONFIG,
+        `下载 ${act.activityName}`
       );
 
-      let filePath = '';
+      await withRetry(
+        () => uploadActivity(filePath, targetClient),
+        RETRY_CONFIG,
+        `上传 ${act.activityName}`
+      );
 
-      try {
-        // 使用重试机制下载并上传
-        filePath = await withRetry(
-          () => downloadActivity(act.activityId, sourceClient),
-          RETRY_CONFIG.maxRetries,
-          `下载 ${act.activityName}`
-        );
-
-        await withRetry(
-          () => uploadActivity(filePath, targetClient),
-          RETRY_CONFIG.maxRetries,
-          `上传 ${act.activityName}`
-        );
-
-        syncedActivities.push(act.activityName);
-      } finally {
-        // 无论成功失败，都清理临时文件
-        if (filePath) {
-          cleanupDownloadedFiles(filePath, act.activityId);
-        }
+      // 记录已同步的活动 ID
+      await saveSyncedActivity(act.activityId, sourceRegion, targetRegion);
+      syncedActivities.push(act.activityName);
+    } finally {
+      // 无论成功失败，都清理临时文件
+      if (filePath) {
+        cleanupDownloadedFiles(filePath, act.activityId);
       }
-
-      // 延迟，避免请求过快
-      await delay(syncDelay);
     }
+
+    // 延迟，避免请求过快
+    await delay(syncDelay);
   }
 
   // 清理整个下载目录
@@ -141,7 +117,7 @@ export const syncActivities = async (
 };
 
 /**
- * 迁移活动数据
+ * 迁移活动数据（支持断点续传）
  * @param sourceRegion 源区域
  * @param targetRegion 目标区域
  */
@@ -152,12 +128,27 @@ export const migrateActivities = async (
   const sourceClient = await createGarminClient(sourceRegion);
   const targetClient = await createGarminClient(targetRegion);
 
-  const { num, start } = GARMIN_CONFIG.migrate;
+  const { num, start: configStart } = GARMIN_CONFIG.migrate;
+
+  // 检查是否有上次的迁移进度
+  const progress = await getMigrationProgress(sourceRegion, targetRegion);
+  const resumeIndex = progress ? progress.lastProcessedIndex + 1 : 0;
+  const effectiveStart = configStart + resumeIndex;
+
+  if (resumeIndex > 0) {
+    logger.info(`从上次进度恢复，跳过前 ${resumeIndex} 条已迁移的活动`);
+  }
 
   // 获取源区域活动
-  const sourceActs = await sourceClient.getActivities(start, num);
+  const sourceActs = await sourceClient.getActivities(effectiveStart, num);
 
-  logger.info(`开始迁移，共 ${sourceActs.length} 条活动`);
+  if (sourceActs.length === 0) {
+    const message = '没有更多活动需要迁移';
+    logger.info(message);
+    return { success: true, total: 0, migrated: 0, failed: 0 };
+  }
+
+  logger.info(`开始迁移，共 ${sourceActs.length} 条活动（从第 ${effectiveStart + 1} 条开始）`);
 
   let migrated = 0;
   let failed = 0;
@@ -165,33 +156,50 @@ export const migrateActivities = async (
 
   for (let i = 0; i < sourceActs.length; i++) {
     const act = sourceActs[i];
-    const index = start + i + 1;
+    const absoluteIndex = resumeIndex + i;
+    const displayIndex = effectiveStart + i + 1;
     let filePath = '';
 
     try {
       logger.info(
-        `迁移第 ${number2capital(index)} 条: [${act.activityName}]，开始于 [${act.startTimeLocal}]`
+        `迁移第 ${number2capital(displayIndex)} 条: [${act.activityName}]，开始于 [${act.startTimeLocal}]`
       );
 
-      // 使用重试机制下载并上传
+      // 使用统一重试机制下载并上传
       filePath = await withRetry(
         () => downloadActivity(act.activityId, sourceClient),
-        RETRY_CONFIG.maxRetries,
+        RETRY_CONFIG,
         `下载 ${act.activityName}`
       );
 
       await withRetry(
         () => uploadActivity(filePath, targetClient),
-        RETRY_CONFIG.maxRetries,
+        RETRY_CONFIG,
         `上传 ${act.activityName}`
       );
 
       migrated++;
+
+      // 每成功迁移一条，保存进度
+      await saveMigrationProgress(
+        sourceRegion,
+        targetRegion,
+        absoluteIndex,
+        sourceActs.length
+      );
     } catch (error) {
       failed++;
       const errMsg = `迁移失败: ${act.activityName} - ${error}`;
       errors.push(errMsg);
       logger.error(errMsg);
+
+      // 即使失败也保存进度，避免重复处理
+      await saveMigrationProgress(
+        sourceRegion,
+        targetRegion,
+        absoluteIndex,
+        sourceActs.length
+      );
     } finally {
       // 无论成功失败，都清理临时文件
       if (filePath) {

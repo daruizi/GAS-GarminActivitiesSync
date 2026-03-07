@@ -2,6 +2,9 @@
  * 配置模块 - 集中管理所有环境变量和配置
  */
 
+import path from 'path';
+import os from 'os';
+
 import { GarminRegion } from '../types';
 
 // Garmin 账户配置
@@ -11,7 +14,7 @@ export interface GarminAccountConfig {
 }
 
 // 从环境变量获取配置
-const getEnv = (key: string, defaultValue: string = ''): string => {
+export const getEnv = (key: string, defaultValue: string = ''): string => {
   return process.env[key] ?? defaultValue;
 };
 
@@ -55,7 +58,7 @@ export const FILE_CONFIG = {
     GPX: 'gpx',
     TCX: 'tcx',
   },
-  DOWNLOAD_DIR: './garmin_fit_files',
+  DOWNLOAD_DIR: path.join(os.tmpdir(), 'garmin_fit_files'),
   DB_FILE_PATH: './db/garmin.db',
 };
 

@@ -31,7 +31,6 @@
     "decompress": "^4.2.1",
     "google-auth-library": "^9.15.1",
     "googleapis": "^148.0.0",
-    "lodash": "^4.17.21",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
     "zod": "^3.24.2"
@@ -39,7 +38,6 @@
   "devDependencies": {
     "@types/crypto-js": "^4.2.2",
     "@types/decompress": "^4.2.7",
-    "@types/lodash": "^4.17.16",
     "@types/node": "^22.13.10",
     "@typescript-eslint/eslint-plugin": "^8.26.0",
     "@typescript-eslint/parser": "^8.26.0",

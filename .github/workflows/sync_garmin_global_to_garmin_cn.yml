@@ -6,7 +6,7 @@ on:
     # 每1小时检查一次 (UTC时间，相当于北京时间的每个整点)
     - cron: "0 * * * *"
 
-# 并发控制：如果当前有任务正在运行，取消旧任务或排队，防止 Git push 冲突
+# 并发控制：如果当前有任务正在运行，取消旧任务或排队，防止冲突
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -35,28 +35,26 @@ jobs:
     name: Sync Garmin Global to Garmin CN
     # 增加 Job 级别的超时限制，防止意外卡死消耗资源
     timeout-minutes: 15
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4 # 升级到 v4
-      
-      - uses: actions/setup-node@v4 # 升级到 v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          node-version: "20" # 升级到长期支持版 Node.js 20
+          node-version: "20"
           cache: "yarn"
-          
+
+      # 从缓存恢复 Session 数据库
+      - name: Restore Session Cache
+        uses: actions/cache@v4
+        with:
+          path: db/garmin.db
+          key: garmin-session-${{ github.repository }}-global2cn
+          restore-keys: |
+            garmin-session-${{ github.repository }}-global2cn
+
       - run: yarn
-      
+
       - run: yarn sync:global2cn
         timeout-minutes: 10
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
-          # 增加 HTTP 请求超时时间（毫秒）
-          NODE_TLS_REJECT_UNAUTHORIZED: "0"
-
-      - uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: Save Garmin Session
-          file_pattern: db/garmin.db
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

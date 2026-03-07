@@ -130,3 +130,22 @@ export interface MigrateResult {
   failed: number;
   errors?: string[];
 }
+
+// 迁移进度记录
+export interface MigrationProgress {
+  id?: number;
+  sourceRegion: string;
+  targetRegion: string;
+  lastProcessedIndex: number;
+  totalActivities: number;
+  updatedAt: string;
+}
+
+// 已同步活动记录
+export interface SyncedActivityRecord {
+  id?: number;
+  activityId: number;
+  sourceRegion: string;
+  targetRegion: string;
+  syncedAt: string;
+}

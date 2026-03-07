@@ -6,14 +6,14 @@ import { GarminConnect } from 'garmin-connect';
 import fs from 'fs';
 import path from 'path';
 import decompress from 'decompress';
-import filter from 'lodash/filter';
 import * as core from '@actions/core';
 
 import { GARMIN_CONFIG, FILE_CONFIG, validateConfig, GARMIN_URL } from '../config';
 import { GarminRegion, GarminClient, GarminActivity, GarminUserInfo, RunningStatistics } from '../types';
-import { initDB, getSession, saveSession, updateSession } from '../utils/database';
+import { getSession, saveSession, updateSession } from '../utils/database';
 import { logger } from '../utils/logger';
 import { formatPace } from '../utils/format';
+import { defaultRateLimiter } from '../utils/rateLimiter';
 
 /**
  * 清理下载的临时文件
@@ -90,9 +90,6 @@ export const createGarminClient = async (region: GarminRegion): Promise<GarminCl
     logger.debug(`已设置请求超时: ${GARMIN_CONFIG.timeout || 30000}ms`);
   }
 
-  // 初始化数据库
-  await initDB();
-
   // 尝试使用已保存的 Session
   const savedSession = await getSession(region);
 
@@ -144,8 +141,13 @@ export const downloadActivity = async (
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  const activity = await client.getActivity({ activityId });
-  await client.downloadOriginalActivityData(activity, dir);
+  // 使用速率限制器控制下载频率
+  const activity = await defaultRateLimiter.executeWithRateLimit(() =>
+    client.getActivity({ activityId })
+  );
+  await defaultRateLimiter.executeWithRateLimit(() =>
+    client.downloadOriginalActivityData(activity, dir)
+  );
 
   const zipFile = `${dir}/${activityId}.zip`;
   const unzipped = await decompress(zipFile, dir);
@@ -169,7 +171,10 @@ export const uploadActivity = async (
   client: GarminClient
 ): Promise<void> => {
   try {
-    const result = await client.uploadActivity(filePath);
+    // 使用速率限制器控制上传频率
+    const result = await defaultRateLimiter.executeWithRateLimit(() =>
+      client.uploadActivity(filePath)
+    );
     logger.success('上传成功', result);
   } catch (error) {
     logger.error('上传失败', error);
@@ -186,7 +191,7 @@ export const getRunningStatistics = async (
   const acts = await client.getActivities(0, 10);
 
   // 筛选跑步类型活动
-  const runningAct = filter(acts, (act) =>
+  const runningAct = acts.filter((act) =>
     act?.activityType?.typeKey?.includes('running')
   )[0];
 

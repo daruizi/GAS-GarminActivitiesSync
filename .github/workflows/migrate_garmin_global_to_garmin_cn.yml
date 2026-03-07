@@ -21,8 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     name: Migrate Garmin Global to Garmin CN
     timeout-minutes: 30
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -31,10 +29,15 @@ jobs:
           node-version: "20"
           cache: "yarn"
 
+      # 从缓存恢复 Session 数据库
+      - name: Restore Session Cache
+        uses: actions/cache@v4
+        with:
+          path: db/garmin.db
+          key: garmin-session-${{ github.repository }}-migrate-global2cn
+          restore-keys: |
+            garmin-session-${{ github.repository }}-migrate-global2cn
+
       - run: yarn
 
       - run: yarn migrate:global2cn
-
-      - uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: Save Garmin Session

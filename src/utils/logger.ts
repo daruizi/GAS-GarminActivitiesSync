@@ -77,7 +77,7 @@ const cleanOldLogFiles = (): void => {
   }
 };
 
-// 写入日志到文件
+// 写入日志到文件（异步 fire-and-forget，不阻塞主流程）
 const writeToFile = (level: LogLevel, message: string, ...args: unknown[]): void => {
   if (!LOG_CONFIG.enableFileLog) return;
 
@@ -94,7 +94,11 @@ const writeToFile = (level: LogLevel, message: string, ...args: unknown[]): void
     };
 
     const logLine = JSON.stringify(logEntry) + '\n';
-    fs.appendFileSync(filePath, logLine, 'utf-8');
+    fs.appendFile(filePath, logLine, 'utf-8', (err) => {
+      if (err) {
+        console.error('日志文件写入失败:', err);
+      }
+    });
   } catch (error) {
     // 文件写入失败时仅输出到控制台
     console.error('日志文件写入失败:', error);

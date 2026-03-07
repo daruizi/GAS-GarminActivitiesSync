@@ -4,7 +4,7 @@
 
 import { sendErrorNotification, sendSuccessNotification } from '../services/notification';
 import { validateAllConfig } from './validation';
-import { closeDB } from './database';
+import { initDB, closeDB } from './database';
 import { logger } from './logger';
 
 export interface TaskResult {
@@ -46,6 +46,9 @@ export const runTask = async (
     if (!configResult.success) {
       throw new Error(`配置验证失败:\n${configResult.errors.join('\n')}`);
     }
+
+    // 一次性初始化数据库
+    await initDB();
 
     // 执行任务
     const result = await task();

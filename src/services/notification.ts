@@ -5,13 +5,8 @@
 import axios from 'axios';
 import * as core from '@actions/core';
 
-import { BARK_CONFIG } from '../config';
+import { BARK_CONFIG, getEnv } from '../config';
 import { logger } from '../utils/logger';
-
-// 从环境变量获取通知配置
-const getEnv = (key: string, defaultValue: string = ''): string => {
-  return process.env[key] ?? defaultValue;
-};
 
 // 通知配置
 const NOTIFICATION_CONFIG = {

@@ -4,11 +4,11 @@
 
 import { JWT } from 'google-auth-library';
 import { google } from 'googleapis';
-import last from 'lodash/last';
 import * as core from '@actions/core';
 
 import { GOOGLE_CONFIG } from '../config';
 import { logger } from '../utils/logger';
+import { withRetry } from '../utils/retry';
 
 /**
  * 获取 Google Sheets 客户端
@@ -30,51 +30,24 @@ const getSheetsClient = async () => {
 const DEFAULT_TIMEOUT = 30000; // 30 秒
 
 /**
- * 带超时和重试的 API 调用包装器
- */
-const withTimeoutAndRetry = async <T>(
-  fn: () => Promise<T>,
-  timeout: number = DEFAULT_TIMEOUT,
-  maxRetries: number = 3
-): Promise<T> => {
-  let lastError: Error | null = null;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-      const result = await fn();
-      clearTimeout(timeoutId);
-      return result;
-    } catch (error) {
-      lastError = error as Error;
-      if (attempt < maxRetries) {
-        logger.warn(`API 调用失败，第 ${attempt} 次重试...`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-      }
-    }
-  }
-
-  throw lastError;
-};
-
-/**
  * 插入数据到 Sheets
  */
 export const insertDataToSheets = async (data: unknown[]): Promise<void> => {
   const sheets = await getSheetsClient();
 
   try {
-    const response = await withTimeoutAndRetry(() =>
-      sheets.spreadsheets.values.append({
-        spreadsheetId: GOOGLE_CONFIG.sheetId,
-        range: '工作表1!A1:AD',
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: [data],
-        },
-      }).then(r => r)
+    const response = await withRetry(
+      () =>
+        sheets.spreadsheets.values.append({
+          spreadsheetId: GOOGLE_CONFIG.sheetId,
+          range: '工作表1!A1:AD',
+          valueInputOption: 'USER_ENTERED',
+          requestBody: {
+            values: [data],
+          },
+        }),
+      { maxRetries: 3, baseDelay: 1000, maxDelay: 5000, timeout: DEFAULT_TIMEOUT },
+      'Google Sheets 写入'
     );
 
     logger.success('数据已写入 Google Sheets');
@@ -93,14 +66,18 @@ export const getLatestSheetsData = async (): Promise<string[]> => {
   const sheets = await getSheetsClient();
 
   try {
-    const response = await withTimeoutAndRetry(() =>
-      sheets.spreadsheets.values.get({
-        spreadsheetId: GOOGLE_CONFIG.sheetId,
-        range: '工作表1!A1:AD',
-      }).then(r => r)
+    const response = await withRetry(
+      () =>
+        sheets.spreadsheets.values.get({
+          spreadsheetId: GOOGLE_CONFIG.sheetId,
+          range: '工作表1!A1:AD',
+        }),
+      { maxRetries: 3, baseDelay: 1000, maxDelay: 5000, timeout: DEFAULT_TIMEOUT },
+      'Google Sheets 读取'
     );
 
-    return last(response.data.values) ?? [];
+    const values = response.data.values;
+    return values ? values[values.length - 1] ?? [] : [];
   } catch (error) {
     const message = `Google Sheets 读取失败: ${error}`;
     core.setFailed(message);
