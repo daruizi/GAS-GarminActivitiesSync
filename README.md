@@ -448,4 +448,12 @@ schedule:
 
 ---
 
-**自动 · 安全 · 省心**
+## 致谢
+
+本项目由 **Claude Code (Claude Opus 4.6)** 主导优化和修复 Bug。
+
+感谢以下 AI 工具的帮助：
+- **[Claude Code](https://claude.ai/code)** - 代码分析、优化、Bug 修复、文档编写
+- **[Claude Opus 4.6](https://www.anthropic.com/claude)** - AI 模型支持
+
+本项目展示了 AI 辅助编程的能力，从代码审查、问题诊断到修复实现，全程由 AI 完成。
