@@ -66,7 +66,7 @@ export const DB_CONFIG = {
 // Google Sheets 配置
 export const GOOGLE_CONFIG = {
   clientEmail: getEnv('GOOGLE_API_CLIENT_EMAIL'),
-  privateKey: getEnv('GOOGLE_API_PRIVATE_KEY').replace(/\\n/gm, '\n'),
+  privateKey: getEnv('GOOGLE_API_PRIVATE_KEY')?.replace(/\\n/gm, '\n') || '',
   sheetId: getEnv('GOOGLE_SHEET_ID'),
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 };

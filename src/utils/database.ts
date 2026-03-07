@@ -109,3 +109,35 @@ export const getSession = async (region: GarminRegion): Promise<SessionData | nu
     return null;
   }
 };
+
+/**
+ * 关闭数据库连接
+ */
+export const closeDB = async (): Promise<void> => {
+  if (dbInstance) {
+    await dbInstance.close();
+    dbInstance = null;
+    logger.debug('数据库连接已关闭');
+  }
+};
+
+/**
+ * 清理过期的 Session 记录
+ * @param daysToKeep 保留天数
+ */
+export const cleanExpiredSessions = async (daysToKeep: number = 30): Promise<void> => {
+  const db = await getDB();
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+
+  // SQLite 不支持直接按日期删除，这里简单清理重复记录
+  // 保留每个用户每个区域的最新一条记录
+  await db.run(`
+    DELETE FROM garmin_session
+    WHERE id NOT IN (
+      SELECT MAX(id) FROM garmin_session GROUP BY user, region
+    )
+  `);
+
+  logger.debug('已清理过期的 Session 记录');
+};
