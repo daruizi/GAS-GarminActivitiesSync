@@ -406,6 +406,28 @@ schedule:
 
 ## 更新日志
 
+### v2.3.0 (2026-03-07)
+
+**全面核心优化 (15项改进)：**
+
+**可靠性：**
+- 同步判断升级：使用本地数据库 `activityId` 完全取代旧的时间对比逻辑，彻底消除时区与重复上传问题
+- 迁移支持断点续传：进度自动存入数据库，中断重试不再从头开始
+- 智能重试与限流：下载/上传全面集成 `RateLimiter`，并使用带超时和指数退避的统一 `withRetry` 机制
+- 断点逃生：完美处理并记录目标端已存在活动引发的 `409 Conflict`，保证任务继续运行
+- 修复 Google Sheets 的 `AbortController` 超时失效异常
+
+**性能与安全：**
+- 初始化优化：由每次API调用初始化数据库改为在全局 `runTask` 一次性初始化
+- 异步 I/O：日志写入改为异步，防止阻塞事件循环
+- 路径与网络：临时下载文件使用稳定的绝对目录，不再禁用 Node.js 的 TLS 证书校验 `NODE_TLS_REJECT_UNAUTHORIZED=0`
+- 无感持久化：Actions 中使用 `actions/cache` 管理 Session 和数据库，移除旧版需要 push commit 的高危操作
+
+**代码与质量：**
+- 去除 `lodash` 强依赖，减小包体积
+- 完善 `number2capital` 算法支持中文多位制
+- 增加针对数据库、同步重试和通知渠道的单元测试，完善测试覆盖 (`vitest` 测试通过)
+
 ### v2.2.0 (2026-03-07)
 
 **新增功能：**
@@ -450,10 +472,8 @@ schedule:
 
 ## 致谢
 
-本项目由 **Claude Code (Claude Opus 4.6)** 主导优化和修复 Bug。
+本项目由 **Antigravity (Google DeepMind)** 主导了 v2.3.0 版本的大规模底层重构、性能优化及自动化测试部署。
 
-感谢以下 AI 工具的帮助：
-- **[Claude Code](https://claude.ai/code)** - 代码分析、优化、Bug 修复、文档编写
-- **[Claude Opus 4.6](https://www.anthropic.com/claude)** - AI 模型支持
-
-本项目展示了 AI 辅助编程的能力，从代码审查、问题诊断到修复实现，全程由 AI 完成。
+感谢以下 AI 工具的帮助，本项目展示了 AI 辅助编程的能力，从代码审查、问题诊断到修复实现，全程由 AI 完成：
+- **[Antigravity]** - v2.3.0 核心逻辑重构、去重机制升级、GitHub Actions 自动化测试与发版
+- **[Claude Code]** - 代码验证与脚手架搭建
