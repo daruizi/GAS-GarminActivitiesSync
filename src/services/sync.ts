@@ -4,11 +4,61 @@
 
 import reverse from 'lodash/reverse';
 
-import { createGarminClient, downloadActivity, uploadActivity } from '../clients/garmin';
+import {
+  createGarminClient,
+  downloadActivity,
+  uploadActivity,
+  cleanupDownloadedFiles,
+  cleanupDownloadDir,
+} from '../clients/garmin';
 import { GARMIN_CONFIG } from '../config';
 import { GarminRegion, SyncResult, MigrateResult } from '../types';
 import { logger } from '../utils/logger';
 import { number2capital, delay } from '../utils/format';
+
+/**
+ * 重试配置
+ */
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  baseDelay: 2000, // 基础延迟 2 秒
+  maxDelay: 10000, // 最大延迟 10 秒
+};
+
+/**
+ * 带重试的异步操作
+ * @param fn 要执行的异步函数
+ * @param maxRetries 最大重试次数
+ * @param context 上下文信息（用于日志）
+ */
+export const withRetry = async <T>(
+  fn: () => Promise<T>,
+  maxRetries: number = RETRY_CONFIG.maxRetries,
+  context?: string
+): Promise<T> => {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+      const delayMs = Math.min(
+        RETRY_CONFIG.baseDelay * Math.pow(2, attempt - 1),
+        RETRY_CONFIG.maxDelay
+      );
+
+      if (attempt < maxRetries) {
+        logger.warn(
+          `${context ? `[${context}] ` : ''}第 ${attempt} 次尝试失败，${delayMs / 1000} 秒后重试: ${lastError.message}`
+        );
+        await delay(delayMs);
+      }
+    }
+  }
+
+  throw lastError;
+};
 
 /**
  * 同步活动数据
@@ -52,16 +102,37 @@ export const syncActivities = async (
         `同步第 ${number2capital(count)} 条: [${act.activityName}]，开始于 [${act.startTimeLocal}]`
       );
 
-      // 下载并上传
-      const filePath = await downloadActivity(act.activityId, sourceClient);
-      await uploadActivity(filePath, targetClient);
+      let filePath = '';
 
-      syncedActivities.push(act.activityName);
+      try {
+        // 使用重试机制下载并上传
+        filePath = await withRetry(
+          () => downloadActivity(act.activityId, sourceClient),
+          RETRY_CONFIG.maxRetries,
+          `下载 ${act.activityName}`
+        );
+
+        await withRetry(
+          () => uploadActivity(filePath, targetClient),
+          RETRY_CONFIG.maxRetries,
+          `上传 ${act.activityName}`
+        );
+
+        syncedActivities.push(act.activityName);
+      } finally {
+        // 无论成功失败，都清理临时文件
+        if (filePath) {
+          cleanupDownloadedFiles(filePath, act.activityId);
+        }
+      }
 
       // 延迟，避免请求过快
       await delay(syncDelay);
     }
   }
+
+  // 清理整个下载目录
+  cleanupDownloadDir();
 
   const message = `同步完成，共 ${count} 条活动`;
   logger.success(message);
@@ -95,15 +166,25 @@ export const migrateActivities = async (
   for (let i = 0; i < sourceActs.length; i++) {
     const act = sourceActs[i];
     const index = start + i + 1;
+    let filePath = '';
 
     try {
       logger.info(
         `迁移第 ${number2capital(index)} 条: [${act.activityName}]，开始于 [${act.startTimeLocal}]`
       );
 
-      // 下载并上传
-      const filePath = await downloadActivity(act.activityId, sourceClient);
-      await uploadActivity(filePath, targetClient);
+      // 使用重试机制下载并上传
+      filePath = await withRetry(
+        () => downloadActivity(act.activityId, sourceClient),
+        RETRY_CONFIG.maxRetries,
+        `下载 ${act.activityName}`
+      );
+
+      await withRetry(
+        () => uploadActivity(filePath, targetClient),
+        RETRY_CONFIG.maxRetries,
+        `上传 ${act.activityName}`
+      );
 
       migrated++;
     } catch (error) {
@@ -111,8 +192,16 @@ export const migrateActivities = async (
       const errMsg = `迁移失败: ${act.activityName} - ${error}`;
       errors.push(errMsg);
       logger.error(errMsg);
+    } finally {
+      // 无论成功失败，都清理临时文件
+      if (filePath) {
+        cleanupDownloadedFiles(filePath, act.activityId);
+      }
     }
   }
+
+  // 清理整个下载目录
+  cleanupDownloadDir();
 
   const message = `迁移完成，成功 ${migrated} 条，失败 ${failed} 条`;
   logger.success(message);

@@ -4,6 +4,7 @@
 
 import { GarminConnect } from 'garmin-connect';
 import fs from 'fs';
+import path from 'path';
 import decompress from 'decompress';
 import filter from 'lodash/filter';
 import * as core from '@actions/core';
@@ -13,6 +14,52 @@ import { GarminRegion, GarminClient, GarminActivity, GarminUserInfo, RunningStat
 import { initDB, getSession, saveSession, updateSession } from '../utils/database';
 import { logger } from '../utils/logger';
 import { formatPace } from '../utils/format';
+
+/**
+ * 清理下载的临时文件
+ * @param filePath 活动文件路径
+ * @param activityId 活动 ID
+ */
+export const cleanupDownloadedFiles = (filePath: string, activityId: number): void => {
+  try {
+    const dir = path.dirname(filePath);
+    const zipFile = path.join(dir, `${activityId}.zip`);
+
+    // 删除活动文件
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      logger.debug(`已清理活动文件: ${filePath}`);
+    }
+
+    // 删除 zip 文件
+    if (fs.existsSync(zipFile)) {
+      fs.unlinkSync(zipFile);
+      logger.debug(`已清理压缩包: ${zipFile}`);
+    }
+  } catch (error) {
+    logger.warn(`清理文件失败: ${error}`);
+  }
+};
+
+/**
+ * 清理下载目录中的所有文件
+ */
+export const cleanupDownloadDir = (): void => {
+  const dir = FILE_CONFIG.DOWNLOAD_DIR;
+
+  try {
+    if (fs.existsSync(dir)) {
+      const files = fs.readdirSync(dir);
+      for (const file of files) {
+        const filePath = path.join(dir, file);
+        fs.unlinkSync(filePath);
+      }
+      logger.debug(`已清理下载目录: ${dir}`);
+    }
+  } catch (error) {
+    logger.warn(`清理下载目录失败: ${error}`);
+  }
+};
 
 /**
  * 创建 Garmin 客户端
@@ -64,10 +111,11 @@ export const createGarminClient = async (region: GarminRegion): Promise<GarminCl
   const userInfo = await client.getUserProfile();
   const { fullName, userName: emailAddress, location } = userInfo;
 
-  if (region === 'CN' && !fullName) {
+  // 改进的验证逻辑：处理空字符串情况
+  if (region === 'CN' && !fullName?.trim()) {
     throw new Error('佳明中国区登录失败');
   }
-  if (region === 'GLOBAL' && !emailAddress) {
+  if (region === 'GLOBAL' && !emailAddress?.trim()) {
     throw new Error('佳明国际区登录失败，请检查账号密码或网络环境');
   }
 

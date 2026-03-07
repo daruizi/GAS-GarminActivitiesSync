@@ -9,6 +9,11 @@ on:
     branches:
       - main
 
+# 并发控制：如果当前有任务正在运行，取消旧任务或排队，防止 Git push 冲突
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   # please change to your own config.
   AESKEY: ${{ secrets.AESKEY }}
@@ -19,6 +24,9 @@ env:
   GOOGLE_API_CLIENT_EMAIL: ${{ secrets.GOOGLE_API_CLIENT_EMAIL }}
   GOOGLE_API_PRIVATE_KEY: ${{ secrets.GOOGLE_API_PRIVATE_KEY }}
   BARK_KEY: ${{ secrets.BARK_KEY }}
+  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+  TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+  WECOM_WEBHOOK_URL: ${{ secrets.WECOM_WEBHOOK_URL }}
   GARMIN_USERNAME: ${{ secrets.GARMIN_USERNAME }}
   GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
   GARMIN_GLOBAL_USERNAME: ${{ secrets.GARMIN_GLOBAL_USERNAME }}
@@ -28,17 +36,23 @@ jobs:
   build:
     runs-on: ubuntu-latest
     name: Sync Garmin CN to Garmin Global
+    # 增加 Job 级别的超时限制，防止意外卡死消耗资源
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'yarn'
+          node-version: "20"
+          cache: "yarn"
+
       - run: yarn
+
       - run: yarn sync:cn2global
         timeout-minutes: 5
+
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: Save Garmin Session

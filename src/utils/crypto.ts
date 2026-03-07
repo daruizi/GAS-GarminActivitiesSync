@@ -7,11 +7,30 @@ import { DB_CONFIG } from '../config';
 import { logger } from './logger';
 
 /**
- * 检查 AES 密钥是否配置
+ * 检查 AES 密钥是否配置并验证强度
  */
 export const checkAESKey = (): void => {
-  if (!DB_CONFIG.aesKey) {
+  const key = DB_CONFIG.aesKey;
+
+  if (!key) {
     throw new Error('AESKEY 未配置，请在环境变量中设置 AESKEY');
+  }
+
+  // 验证密钥长度（AES-128 至少需要 16 个字符）
+  if (key.length < 16) {
+    throw new Error('AESKEY 长度至少需要 16 个字符，建议使用 32 个字符以上的复杂密钥');
+  }
+
+  // 验证密钥复杂度
+  const hasLower = /[a-z]/.test(key);
+  const hasUpper = /[A-Z]/.test(key);
+  const hasNumber = /[0-9]/.test(key);
+  const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(key);
+
+  const complexityCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
+
+  if (complexityCount < 3) {
+    logger.warn('AESKEY 复杂度较低，建议包含大小写字母、数字和特殊字符');
   }
 };
 

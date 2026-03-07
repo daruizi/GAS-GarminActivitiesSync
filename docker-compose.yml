@@ -1,4 +1,4 @@
-version: '3'
+version: '3.8'
 services:
   daily-sync:
     image: 'daily-sync:latest'
@@ -8,8 +8,20 @@ services:
     env_file:
       - .env
     container_name: daily-sync
-    command: yarn sync_cn
+    # 可选命令（取消注释以启用）：
+    # 同步中国区 → 国际区（默认）
+    command: yarn sync:cn2global
+    # 同步国际区 → 中国区
+    # command: yarn sync:global2cn
+    # 迁移中国区 → 国际区
+    # command: yarn migrate:cn2global
+    # 迁移国际区 → 中国区
+    # command: yarn migrate:global2cn
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
+        max-file: "3"
+    volumes:
+      - ./db:/app/db
+      - ./logs:/app/logs

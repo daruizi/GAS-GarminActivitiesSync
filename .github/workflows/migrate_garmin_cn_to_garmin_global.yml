@@ -6,6 +6,9 @@ on:
 env:
   AESKEY: ${{ secrets.AESKEY }}
   BARK_KEY: ${{ secrets.BARK_KEY }}
+  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+  TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+  WECOM_WEBHOOK_URL: ${{ secrets.WECOM_WEBHOOK_URL }}
   GARMIN_USERNAME: ${{ secrets.GARMIN_USERNAME }}
   GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
   GARMIN_GLOBAL_USERNAME: ${{ secrets.GARMIN_GLOBAL_USERNAME }}
@@ -17,16 +20,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
     name: Migrate Garmin CN to Garmin Global
+    timeout-minutes: 30
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'yarn'
+          node-version: "20"
+          cache: "yarn"
+
       - run: yarn
+
       - run: yarn migrate:cn2global
+
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: Save Garmin Session
