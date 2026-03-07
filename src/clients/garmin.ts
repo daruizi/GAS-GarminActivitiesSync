@@ -84,10 +84,9 @@ export const createGarminClient = async (region: GarminRegion): Promise<GarminCl
   );
 
   // 配置 axios 超时时间
-  // @ts-expect-error - 访问内部 axios 实例
-  if (client.client?.client?.defaults) {
-    // @ts-expect-error - 设置 axios 默认超时
-    client.client.client.defaults.timeout = GARMIN_CONFIG.timeout || 30000;
+  const axiosClient = (client as unknown as { client: { client: { defaults: { timeout: number } } } })?.client?.client;
+  if (axiosClient?.defaults) {
+    axiosClient.defaults.timeout = GARMIN_CONFIG.timeout || 30000;
     logger.debug(`已设置请求超时: ${GARMIN_CONFIG.timeout || 30000}ms`);
   }
 
