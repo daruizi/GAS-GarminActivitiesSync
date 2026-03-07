@@ -49,7 +49,10 @@ jobs:
       
       - run: yarn sync:global2cn
         timeout-minutes: 5
-        
+
+      - name: Pull latest changes
+        run: git pull --rebase origin main
+
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: Save Garmin Session
