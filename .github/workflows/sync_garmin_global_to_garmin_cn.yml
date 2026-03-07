@@ -48,7 +48,11 @@ jobs:
       - run: yarn
       
       - run: yarn sync:global2cn
-        timeout-minutes: 5
+        timeout-minutes: 10
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
+          # 增加 HTTP 请求超时时间（毫秒）
+          NODE_TLS_REJECT_UNAUTHORIZED: "0"
 
       - name: Pull latest changes
         run: git pull --rebase origin main

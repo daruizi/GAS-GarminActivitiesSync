@@ -32,13 +32,15 @@ export const GARMIN_CONFIG = {
   // 同步配置
   sync: {
     num: parseInt(getEnv('GARMIN_SYNC_NUM', '10'), 10),
-    delay: 1000,
+    delay: parseInt(getEnv('GARMIN_SYNC_DELAY', '2000'), 10), // 增加默认延迟到 2 秒
   },
   // 迁移配置
   migrate: {
     num: parseInt(getEnv('GARMIN_MIGRATE_NUM', '200'), 10),
     start: parseInt(getEnv('GARMIN_MIGRATE_START', '0'), 10),
   },
+  // HTTP 请求超时配置（毫秒）
+  timeout: parseInt(getEnv('GARMIN_REQUEST_TIMEOUT', '30000'), 10), // 默认 30 秒
 };
 
 // Garmin URL 配置（仅保留使用的属性）
