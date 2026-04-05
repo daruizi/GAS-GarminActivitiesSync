@@ -34,16 +34,16 @@ export const GARMIN_CONFIG = {
   },
   // 同步配置
   sync: {
-    num: parseInt(getEnv('GARMIN_SYNC_NUM', '10'), 10),
-    delay: parseInt(getEnv('GARMIN_SYNC_DELAY', '2000'), 10), // 增加默认延迟到 2 秒
+    num: parseInt(process.env.GARMIN_SYNC_NUM || '10', 10),
+    delay: parseInt(process.env.GARMIN_SYNC_DELAY || '2000', 10),
   },
   // 迁移配置
   migrate: {
-    num: parseInt(getEnv('GARMIN_MIGRATE_NUM', '200'), 10),
-    start: parseInt(getEnv('GARMIN_MIGRATE_START', '0'), 10),
+    num: parseInt(process.env.GARMIN_MIGRATE_NUM || '200', 10),
+    start: parseInt(process.env.GARMIN_MIGRATE_START || '0', 10),
   },
   // HTTP 请求超时配置（毫秒）
-  timeout: parseInt(getEnv('GARMIN_REQUEST_TIMEOUT', '30000'), 10), // 默认 30 秒
+  timeout: parseInt(process.env.GARMIN_REQUEST_TIMEOUT || '30000', 10),
 };
 
 // Garmin URL 配置（仅保留使用的属性）
@@ -87,7 +87,8 @@ export const RQ_CONFIG = {
     OVERVIEW: '/training/getOverView',
     UPDATE: 'training/update-overview?userId=',
   },
-  userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.64 Safari/537.36',
+  userAgent:
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.64 Safari/537.36',
 };
 
 // Bark 通知配置
