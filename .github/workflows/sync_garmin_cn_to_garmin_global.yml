@@ -15,6 +15,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  # 强制 Github Actions 使用 Node.js 24 消除过期警告
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   # Garmin 账号配置（必填）
   AESKEY: ${{ secrets.AESKEY }}
   GARMIN_USERNAME: ${{ secrets.GARMIN_USERNAME }}
@@ -48,7 +50,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "yarn"
 
       - name: Cache Session Database
