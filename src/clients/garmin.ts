@@ -102,15 +102,21 @@ export const createGarminClient = async (region: GarminRegion): Promise<GarminCl
     await saveSession(region, client.exportToken());
   } else {
     // 使用保存的 Session
+    let sessionValid = false;
     try {
       logger.info(`${region}: 使用已保存的 Session 登录`);
       await client.loadToken(savedSession.oauth1, savedSession.oauth2);
-    } catch {
+      // 必须在这里发起一次实际的网络请求来验证 Token 是否真的有效
+      // 否则 loadToken 仅仅是赋值，后续遇到失效 Token 会直接抛错崩溃
+      await client.getUserProfile();
+      sessionValid = true;
+    } catch (err: any) {
       // Session 失效，重新登录
-      logger.warn(`${region}: Session 已失效，重新登录...`);
+      logger.warn(`${region}: Session 已失效 (${err.message})，正在重新尝试账密登录...`);
       await client.login(config.username, config.password);
     }
-    // 无论是加载成功还是重新登录，都更新 Session 以刷新 token 过期时间
+
+    // 如果 Session 仍有效 或 重新登录成功，都更新 DB 以刷新过期时间
     await updateSession(region, client.exportToken());
   }
 
