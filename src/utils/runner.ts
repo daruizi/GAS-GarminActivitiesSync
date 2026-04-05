@@ -4,6 +4,7 @@
 
 import { sendErrorNotification, sendSuccessNotification } from '../services/notification';
 import { validateAllConfig } from './validation';
+import { checkAESKey } from './crypto';
 import { initDB, closeDB } from './database';
 import { logger } from './logger';
 
@@ -15,11 +16,9 @@ export interface TaskResult {
 /**
  * 执行任务并处理通知
  */
-export const runTask = async (
-  taskName: string,
-  task: () => Promise<TaskResult>
-): Promise<void> => {
+export const runTask = async (taskName: string, task: () => Promise<TaskResult>): Promise<void> => {
   const startTime = Date.now();
+  let exitCode = 0;
 
   logger.info(`========== 开始 ${taskName} ==========`);
 
@@ -44,8 +43,11 @@ export const runTask = async (
 
     // 如果有错误，抛出异常
     if (!configResult.success) {
-      throw new Error(`配置验证失败:\n${configResult.errors.join('\n')}`);
+      throw new Error(`配置验证失败：\n${configResult.errors.join('\n')}`);
     }
+
+    // 一次性校验 AES Key（缓存结果，后续 encrypt/decrypt 不再重复校验）
+    checkAESKey();
 
     // 一次性初始化数据库
     await initDB();
@@ -58,15 +60,19 @@ export const runTask = async (
     }
   } catch (error) {
     await sendErrorNotification(taskName, error as Error);
-    process.exit(1);
+    exitCode = 1;
   } finally {
     // 关闭数据库连接
     await closeDB();
+
+    // 计算并输出执行时间
+    const duration = Date.now() - startTime;
+    const seconds = (duration / 1000).toFixed(2);
+    logger.info(`========== 完成 (耗时 ${seconds} 秒) ==========`);
   }
 
-  // 计算并输出执行时间
-  const duration = Date.now() - startTime;
-  const seconds = (duration / 1000).toFixed(2);
-
-  logger.info(`========== 完成 (耗时 ${seconds} 秒) ==========`);
+  // process.exit 移至 finally 之后，确保 closeDB 和日志输出完整执行
+  if (exitCode !== 0) {
+    process.exit(exitCode);
+  }
 };

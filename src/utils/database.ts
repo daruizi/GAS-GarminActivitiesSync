@@ -147,13 +147,10 @@ export const closeDB = async (): Promise<void> => {
  * 清理过期的 Session 记录
  * @param daysToKeep 保留天数
  */
-export const cleanExpiredSessions = async (daysToKeep: number = 30): Promise<void> => {
+export const cleanExpiredSessions = async (): Promise<void> => {
   const db = await getDB();
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
-  // SQLite 不支持直接按日期删除，这里简单清理重复记录
-  // 保留每个用户每个区域的最新一条记录
+  // 保留每个用户每个区域的最新一条记录，清理多余的旧记录
   await db.run(`
     DELETE FROM garmin_session
     WHERE id NOT IN (
@@ -161,7 +158,7 @@ export const cleanExpiredSessions = async (daysToKeep: number = 30): Promise<voi
     )
   `);
 
-  logger.debug('已清理过期的 Session 记录');
+  logger.debug('已清理多余的 Session 记录');
 };
 
 // ==================== 已同步活动记录 ====================
@@ -213,6 +210,7 @@ export const saveMigrationProgress = async (
   totalActivities: number
 ): Promise<void> => {
   const db = await getDB();
+  const now = new Date().toISOString();
   await db.run(
     `INSERT INTO migration_progress (source_region, target_region, last_processed_index, total_activities, updated_at)
      VALUES (?, ?, ?, ?, ?)
@@ -222,10 +220,10 @@ export const saveMigrationProgress = async (
     targetRegion,
     lastProcessedIndex,
     totalActivities,
-    new Date().toISOString(),
+    now,
     lastProcessedIndex,
     totalActivities,
-    new Date().toISOString()
+    now
   );
   logger.debug(`迁移进度已保存: ${sourceRegion} -> ${targetRegion}, index: ${lastProcessedIndex}`);
 };

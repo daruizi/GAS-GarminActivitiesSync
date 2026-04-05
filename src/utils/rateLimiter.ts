@@ -1,5 +1,8 @@
 /**
  * 速率限制工具模块
+ *
+ * 使用滑动窗口计数器实现 O(1) 速率检查，
+ * 替代旧版数组线性扫描方案。
  */
 
 import { logger } from './logger';
@@ -32,127 +35,84 @@ const DEFAULT_CONFIG: RateLimiterConfig = {
 };
 
 /**
- * 请求记录
+ * 滑动窗口计数器
+ * 每个窗口存储当前窗口的计数和窗口起始时间戳
  */
-interface RequestRecord {
-  timestamp: number;
+interface WindowCounter {
+  windowStart: number;
   count: number;
 }
 
 /**
- * 速率限制器类
+ * 速率限制器类（O(1) 滑动窗口计数器实现）
  */
 export class RateLimiter {
   private config: RateLimiterConfig;
-  private secondRequests: RequestRecord[] = [];
-  private minuteRequests: RequestRecord[] = [];
-  private hourRequests: RequestRecord[] = [];
+  private secondCounter: WindowCounter = { windowStart: 0, count: 0 };
+  private minuteCounter: WindowCounter = { windowStart: 0, count: 0 };
+  private hourCounter: WindowCounter = { windowStart: 0, count: 0 };
 
   constructor(config: Partial<RateLimiterConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
   /**
-   * 清理过期的请求记录
+   * 获取当前时间对齐到指定窗口的起始时间戳
    */
-  private cleanExpiredRecords(): void {
-    const now = Date.now();
-
-    // 清理秒级记录（保留最近 2 秒）
-    this.secondRequests = this.secondRequests.filter(
-      (r) => now - r.timestamp < 2000
-    );
-
-    // 清理分钟级记录（保留最近 2 分钟）
-    this.minuteRequests = this.minuteRequests.filter(
-      (r) => now - r.timestamp < 2 * 60 * 1000
-    );
-
-    // 清理小时级记录（保留最近 2 小时）
-    this.hourRequests = this.hourRequests.filter(
-      (r) => now - r.timestamp < 2 * 60 * 60 * 1000
-    );
+  private getWindowStart(now: number, windowMs: number): number {
+    return Math.floor(now / windowMs) * windowMs;
   }
 
   /**
-   * 检查是否可以发送请求
+   * 检查并重置过期窗口的计数器
+   */
+  private refreshCounter(counter: WindowCounter, currentWindowStart: number): void {
+    if (counter.windowStart !== currentWindowStart) {
+      counter.windowStart = currentWindowStart;
+      counter.count = 0;
+    }
+  }
+
+  /**
+   * 检查是否可以发送请求 - O(1) 时间复杂度
    */
   canMakeRequest(): boolean {
-    this.cleanExpiredRecords();
-
     const now = Date.now();
-    const currentSecond = Math.floor(now / 1000) * 1000;
-    const currentMinute = Math.floor(now / (60 * 1000)) * 60 * 1000;
-    const currentHour = Math.floor(now / (60 * 60 * 1000)) * 60 * 60 * 1000;
 
-    // 检查秒级限制
-    const secondCount = this.secondRequests
-      .filter((r) => r.timestamp >= currentSecond)
-      .reduce((sum, r) => sum + r.count, 0);
+    const currentSecond = this.getWindowStart(now, 1000);
+    const currentMinute = this.getWindowStart(now, 60_000);
+    const currentHour = this.getWindowStart(now, 3_600_000);
 
-    if (secondCount >= this.config.maxRequestsPerSecond) {
-      return false;
-    }
+    // 刷新过期窗口
+    this.refreshCounter(this.secondCounter, currentSecond);
+    this.refreshCounter(this.minuteCounter, currentMinute);
+    this.refreshCounter(this.hourCounter, currentHour);
 
-    // 检查分钟级限制
-    const minuteCount = this.minuteRequests
-      .filter((r) => r.timestamp >= currentMinute)
-      .reduce((sum, r) => sum + r.count, 0);
-
-    if (minuteCount >= this.config.maxRequestsPerMinute) {
-      return false;
-    }
-
-    // 检查小时级限制
-    const hourCount = this.hourRequests
-      .filter((r) => r.timestamp >= currentHour)
-      .reduce((sum, r) => sum + r.count, 0);
-
-    if (hourCount >= this.config.maxRequestsPerHour) {
-      return false;
-    }
+    // 检查各级限制
+    if (this.secondCounter.count >= this.config.maxRequestsPerSecond) return false;
+    if (this.minuteCounter.count >= this.config.maxRequestsPerMinute) return false;
+    if (this.hourCounter.count >= this.config.maxRequestsPerHour) return false;
 
     return true;
   }
 
   /**
-   * 记录一次请求
+   * 记录一次请求 - O(1) 时间复杂度
    */
   recordRequest(): void {
     const now = Date.now();
-    const currentSecond = Math.floor(now / 1000) * 1000;
-    const currentMinute = Math.floor(now / (60 * 1000)) * 60 * 1000;
-    const currentHour = Math.floor(now / (60 * 60 * 1000)) * 60 * 60 * 1000;
 
-    // 更新秒级记录
-    const secondRecord = this.secondRequests.find(
-      (r) => r.timestamp === currentSecond
-    );
-    if (secondRecord) {
-      secondRecord.count++;
-    } else {
-      this.secondRequests.push({ timestamp: currentSecond, count: 1 });
-    }
+    const currentSecond = this.getWindowStart(now, 1000);
+    const currentMinute = this.getWindowStart(now, 60_000);
+    const currentHour = this.getWindowStart(now, 3_600_000);
 
-    // 更新分钟级记录
-    const minuteRecord = this.minuteRequests.find(
-      (r) => r.timestamp === currentMinute
-    );
-    if (minuteRecord) {
-      minuteRecord.count++;
-    } else {
-      this.minuteRequests.push({ timestamp: currentMinute, count: 1 });
-    }
+    this.refreshCounter(this.secondCounter, currentSecond);
+    this.refreshCounter(this.minuteCounter, currentMinute);
+    this.refreshCounter(this.hourCounter, currentHour);
 
-    // 更新小时级记录
-    const hourRecord = this.hourRequests.find(
-      (r) => r.timestamp === currentHour
-    );
-    if (hourRecord) {
-      hourRecord.count++;
-    } else {
-      this.hourRequests.push({ timestamp: currentHour, count: 1 });
-    }
+    this.secondCounter.count++;
+    this.minuteCounter.count++;
+    this.hourCounter.count++;
   }
 
   /**
@@ -182,30 +142,23 @@ export class RateLimiter {
   }
 
   /**
-   * 获取当前请求统计
+   * 获取当前请求统计 - O(1) 时间复杂度
    */
   getStats(): {
     second: number;
     minute: number;
     hour: number;
   } {
-    this.cleanExpiredRecords();
-
     const now = Date.now();
-    const currentSecond = Math.floor(now / 1000) * 1000;
-    const currentMinute = Math.floor(now / (60 * 1000)) * 60 * 1000;
-    const currentHour = Math.floor(now / (60 * 60 * 1000)) * 60 * 60 * 1000;
+
+    const currentSecond = this.getWindowStart(now, 1000);
+    const currentMinute = this.getWindowStart(now, 60_000);
+    const currentHour = this.getWindowStart(now, 3_600_000);
 
     return {
-      second: this.secondRequests
-        .filter((r) => r.timestamp >= currentSecond)
-        .reduce((sum, r) => sum + r.count, 0),
-      minute: this.minuteRequests
-        .filter((r) => r.timestamp >= currentMinute)
-        .reduce((sum, r) => sum + r.count, 0),
-      hour: this.hourRequests
-        .filter((r) => r.timestamp >= currentHour)
-        .reduce((sum, r) => sum + r.count, 0),
+      second: this.secondCounter.windowStart === currentSecond ? this.secondCounter.count : 0,
+      minute: this.minuteCounter.windowStart === currentMinute ? this.minuteCounter.count : 0,
+      hour: this.hourCounter.windowStart === currentHour ? this.hourCounter.count : 0,
     };
   }
 
@@ -213,16 +166,16 @@ export class RateLimiter {
    * 重置所有计数
    */
   reset(): void {
-    this.secondRequests = [];
-    this.minuteRequests = [];
-    this.hourRequests = [];
+    this.secondCounter = { windowStart: 0, count: 0 };
+    this.minuteCounter = { windowStart: 0, count: 0 };
+    this.hourCounter = { windowStart: 0, count: 0 };
   }
 
   /**
    * 休眠函数
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
 
@@ -234,8 +187,6 @@ export const defaultRateLimiter = new RateLimiter();
 /**
  * 创建自定义速率限制器
  */
-export const createRateLimiter = (
-  config: Partial<RateLimiterConfig>
-): RateLimiter => {
+export const createRateLimiter = (config: Partial<RateLimiterConfig>): RateLimiter => {
   return new RateLimiter(config);
 };

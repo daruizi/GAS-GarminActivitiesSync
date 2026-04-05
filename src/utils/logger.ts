@@ -15,11 +15,23 @@ const LOG_CONFIG = {
   enableFileLog: process.env.ENABLE_FILE_LOG !== 'false',
 };
 
-// 确保日志目录存在
+// 日志目录初始化标志，避免每条日志都检查目录
+let logDirInitialized = false;
+
+// 日志轮转节流：记录上次检查时间和写入计数
+let lastRotateCheckTime = 0;
+let writeCountSinceLastCheck = 0;
+const ROTATE_CHECK_INTERVAL_MS = 30_000; // 30 秒
+const ROTATE_CHECK_WRITE_COUNT = 100; // 每 100 条检查一次
+
+// 确保日志目录存在（仅首次调用时创建）
 const ensureLogDir = (): void => {
+  if (logDirInitialized) return;
+
   if (!fs.existsSync(LOG_CONFIG.logDir)) {
     fs.mkdirSync(LOG_CONFIG.logDir, { recursive: true });
   }
+  logDirInitialized = true;
 };
 
 // 获取当前日期字符串
@@ -46,14 +58,27 @@ const getLogFilePath = (): string => {
   return path.join(LOG_CONFIG.logDir, `garmin-sync-${getDateString()}.log`);
 };
 
-// 检查并轮转日志文件
-const rotateLogFile = (filePath: string): void => {
+// 检查并轮转日志文件（带节流：仅在间隔超过阈值时执行）
+const maybeRotateLogFile = (filePath: string): void => {
+  const now = Date.now();
+  writeCountSinceLastCheck++;
+
+  // 节流检查：每 30 秒或每 100 条日志才执行一次文件大小检查
+  if (
+    writeCountSinceLastCheck < ROTATE_CHECK_WRITE_COUNT &&
+    now - lastRotateCheckTime < ROTATE_CHECK_INTERVAL_MS
+  ) {
+    return;
+  }
+
+  lastRotateCheckTime = now;
+  writeCountSinceLastCheck = 0;
+
   if (!fs.existsSync(filePath)) return;
 
   const stats = fs.statSync(filePath);
   if (stats.size >= LOG_CONFIG.maxFileSize) {
-    const timestamp = Date.now();
-    const rotatedPath = filePath.replace('.log', `-${timestamp}.log`);
+    const rotatedPath = filePath.replace('.log', `-${now}.log`);
     fs.renameSync(filePath, rotatedPath);
 
     // 清理旧日志文件
@@ -85,7 +110,7 @@ const writeToFile = (level: LogLevel, message: string, ...args: unknown[]): void
   try {
     ensureLogDir();
     const filePath = getLogFilePath();
-    rotateLogFile(filePath);
+    maybeRotateLogFile(filePath);
 
     const logEntry = {
       timestamp: getTimestamp(),

@@ -6,10 +6,16 @@ import CryptoJS from 'crypto-js';
 import { DB_CONFIG } from '../config';
 import { logger } from './logger';
 
+// 缓存 AES Key 校验状态，避免每次加密/解密时重复校验
+let aesKeyVerified = false;
+
 /**
  * 检查 AES 密钥是否配置并验证强度
+ * 设计为幂等：首次调用执行完整校验，后续调用直接跳过
  */
 export const checkAESKey = (): void => {
+  if (aesKeyVerified) return;
+
   const key = DB_CONFIG.aesKey;
 
   if (!key) {
@@ -32,13 +38,14 @@ export const checkAESKey = (): void => {
   if (complexityCount < 3) {
     logger.warn('AESKEY 复杂度较低，建议包含大小写字母、数字和特殊字符');
   }
+
+  aesKeyVerified = true;
 };
 
 /**
  * 加密数据
  */
 export const encrypt = (data: Record<string, unknown>): string => {
-  checkAESKey();
   const str = JSON.stringify(data);
   return CryptoJS.AES.encrypt(str, DB_CONFIG.aesKey).toString();
 };
@@ -46,7 +53,6 @@ export const encrypt = (data: Record<string, unknown>): string => {
  * 解密数据
  */
 export const decrypt = <T = Record<string, unknown>>(encryptedStr: string): T => {
-  checkAESKey();
   try {
     const bytes = CryptoJS.AES.decrypt(encryptedStr, DB_CONFIG.aesKey);
     const str = bytes.toString(CryptoJS.enc.Utf8);

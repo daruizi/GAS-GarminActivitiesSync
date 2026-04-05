@@ -40,13 +40,15 @@ export const syncActivities = async (
   targetRegion: GarminRegion
 ): Promise<SyncResult> => {
   const sourceClient = await createGarminClient(sourceRegion);
-  const targetClient = await createGarminClient(targetRegion);
 
   const syncNum = GARMIN_CONFIG.sync.num;
   const syncDelay = GARMIN_CONFIG.sync.delay;
 
-  // 获取源区域活动
-  const sourceActs = await sourceClient.getActivities(0, syncNum);
+  // 并行获取源区域活动和已同步 ID 集合
+  const [sourceActs, syncedIds] = await Promise.all([
+    sourceClient.getActivities(0, syncNum),
+    getSyncedActivityIds(sourceRegion, targetRegion),
+  ]);
 
   if (sourceActs.length === 0) {
     const message = '源区域没有活动数据';
@@ -54,19 +56,18 @@ export const syncActivities = async (
     return { success: true, count: 0, message };
   }
 
-  // 从数据库获取已同步的活动 ID 集合
-  const syncedIds = await getSyncedActivityIds(sourceRegion, targetRegion);
-
   // 筛选未同步的活动（反转为从旧到新）
-  const actsToSync = [...sourceActs]
-    .reverse()
-    .filter((act) => !syncedIds.has(act.activityId));
+  const actsToSync = [...sourceActs].reverse().filter(act => !syncedIds.has(act.activityId));
 
   if (actsToSync.length === 0) {
     const message = `没有要同步的活动，最近的活动: [${sourceActs[0].activityName}]，开始于: [${sourceActs[0].startTimeLocal}]`;
     logger.info(message);
     return { success: true, count: 0, message };
   }
+
+  // 惰性创建目标客户端：仅在确认有活动需要同步时才登录目标区域
+  // 避免无活动时浪费一次完整的登录 + getUserProfile 往返
+  const targetClient = await createGarminClient(targetRegion);
 
   const syncedActivities: string[] = [];
   let count = 0;
@@ -100,9 +101,7 @@ export const syncActivities = async (
       const errMsg = String(error);
       // 409 Conflict 表示活动在目标端已存在，标记为已同步并继续
       if (errMsg.includes('409') || errMsg.includes('Conflict')) {
-        logger.warn(
-          `活动 [${act.activityName}] 在目标端已存在（409 Conflict），标记为已同步`
-        );
+        logger.warn(`活动 [${act.activityName}] 在目标端已存在（409 Conflict），标记为已同步`);
         await saveSyncedActivity(act.activityId, sourceRegion, targetRegion);
         syncedActivities.push(act.activityName);
       } else {
@@ -116,8 +115,10 @@ export const syncActivities = async (
       }
     }
 
-    // 延迟，避免请求过快
-    await delay(syncDelay);
+    // 延迟避免请求过快（最后一条不需要延迟）
+    if (count < actsToSync.length) {
+      await delay(syncDelay);
+    }
   }
 
   // 清理整个下载目录
@@ -194,19 +195,13 @@ export const migrateActivities = async (
       migrated++;
 
       // 每成功迁移一条，保存进度
-      await saveMigrationProgress(
-        sourceRegion,
-        targetRegion,
-        absoluteIndex,
-        sourceActs.length
-      );
+      await saveMigrationProgress(sourceRegion, targetRegion, absoluteIndex, sourceActs.length);
     } catch (error) {
       const errMsg = String(error);
-      // 409 Conflict 表示活动已存在，视为成功
+      // 409 Conflict 表示活动已存在，标记为已同步并视为成功
       if (errMsg.includes('409') || errMsg.includes('Conflict')) {
-        logger.warn(
-          `活动 [${act.activityName}] 在目标端已存在（409 Conflict），跳过`
-        );
+        logger.warn(`活动 [${act.activityName}] 在目标端已存在（409 Conflict），跳过`);
+        await saveSyncedActivity(act.activityId, sourceRegion, targetRegion);
         migrated++;
       } else {
         failed++;
@@ -216,12 +211,7 @@ export const migrateActivities = async (
       }
 
       // 即使失败也保存进度，避免重复处理
-      await saveMigrationProgress(
-        sourceRegion,
-        targetRegion,
-        absoluteIndex,
-        sourceActs.length
-      );
+      await saveMigrationProgress(sourceRegion, targetRegion, absoluteIndex, sourceActs.length);
     } finally {
       // 无论成功失败，都清理临时文件
       if (filePath) {

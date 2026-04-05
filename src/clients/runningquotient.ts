@@ -64,9 +64,9 @@ const parseRQData = (htmlData: {
   const { conditionHtml, recordHtml, runlevelHtml } = htmlData;
 
   // 解析即时跑力、训练负荷、时间
-  const now = /<div class.*data-bit[^>]*>(.*?)<small>/.exec(recordHtml.substr(0, 3000));
-  const load = /<div class.*data-text[^>]*>(.*?)<small>点/.exec(recordHtml.substr(0, 3000));
-  const time = /<span class.*data-label[^>]*>(.*?)<\/span>/.exec(recordHtml.substr(0, 3000));
+  const now = /<div class.*data-bit[^>]*>(.*?)<small>/.exec(recordHtml.substring(0, 3000));
+  const load = /<div class.*data-text[^>]*>(.*?)<small>点/.exec(recordHtml.substring(0, 3000));
+  const time = /<span class.*data-label[^>]*>(.*?)<\/span>/.exec(recordHtml.substring(0, 3000));
 
   logger.info(`即时跑力: ${now?.[1]}`);
   logger.info(`训练负荷: ${load?.[1]}`);

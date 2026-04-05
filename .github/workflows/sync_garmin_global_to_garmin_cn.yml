@@ -12,49 +12,52 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # please change to your own config.
+  # Garmin 账号配置（必填）
   AESKEY: ${{ secrets.AESKEY }}
-  RQ_COOKIE: ${{ secrets.RQ_COOKIE }}
-  RQ_CSRF_TOKEN: ${{ secrets.RQ_CSRF_TOKEN }}
-  RQ_USERID: ${{ secrets.RQ_USERID }}
-  GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-  GOOGLE_API_CLIENT_EMAIL: ${{ secrets.GOOGLE_API_CLIENT_EMAIL }}
-  GOOGLE_API_PRIVATE_KEY: ${{ secrets.GOOGLE_API_PRIVATE_KEY }}
-  BARK_KEY: ${{ secrets.BARK_KEY }}
-  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-  TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-  WECOM_WEBHOOK_URL: ${{ secrets.WECOM_WEBHOOK_URL }}
   GARMIN_USERNAME: ${{ secrets.GARMIN_USERNAME }}
   GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
   GARMIN_GLOBAL_USERNAME: ${{ secrets.GARMIN_GLOBAL_USERNAME }}
   GARMIN_GLOBAL_PASSWORD: ${{ secrets.GARMIN_GLOBAL_PASSWORD }}
+  # 同步参数（可选）
+  GARMIN_SYNC_NUM: ${{ secrets.GARMIN_SYNC_NUM }}
+  GARMIN_SYNC_DELAY: ${{ secrets.GARMIN_SYNC_DELAY }}
+  GARMIN_REQUEST_TIMEOUT: ${{ secrets.GARMIN_REQUEST_TIMEOUT }}
+  # 通知配置（可选）
+  BARK_KEY: ${{ secrets.BARK_KEY }}
+  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+  TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+  WECOM_WEBHOOK_URL: ${{ secrets.WECOM_WEBHOOK_URL }}
 
 jobs:
-  build:
+  sync:
     runs-on: ubuntu-latest
     name: Sync Garmin Global to Garmin CN
-    # 增加 Job 级别的超时限制，防止意外卡死消耗资源
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            src
+            db
+            package.json
+            yarn.lock
+            tsconfig.json
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "yarn"
 
-      # 从缓存恢复 Session 数据库
-      - name: Restore Session Cache
+      - name: Cache Session Database
         uses: actions/cache@v4
         with:
           path: db/garmin.db
-          key: garmin-session-${{ github.repository }}-global2cn
+          key: garmin-session-${{ github.repository }}-global2cn-${{ github.run_id }}
           restore-keys: |
-            garmin-session-${{ github.repository }}-global2cn
+            garmin-session-${{ github.repository }}-global2cn-
 
-      - run: yarn
+      - run: yarn --frozen-lockfile --prefer-offline
+        name: Install dependencies
 
       - run: yarn sync:global2cn
         timeout-minutes: 10
-        env:
-          NODE_OPTIONS: "--max-old-space-size=4096"

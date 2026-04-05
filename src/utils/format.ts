@@ -46,6 +46,10 @@ export const number2capital = (num: number): string => {
  * 格式化配速
  */
 export const formatPace = (speedMs: number): { pace: number; text: string } => {
+  if (!speedMs || speedMs <= 0) {
+    return { pace: 0, text: '0:00' };
+  }
+
   const pace = 1 / ((speedMs / 1000) * 60);
   const paceMin = Math.floor(pace);
   const paceSec = (pace - paceMin) * 60;
@@ -61,5 +65,5 @@ export const formatPace = (speedMs: number): { pace: number; text: string } => {
  * 延迟函数
  */
 export const delay = (ms: number): Promise<void> => {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise(resolve => setTimeout(resolve, ms));
 };

@@ -22,10 +22,7 @@ const NOTIFICATION_CONFIG = {
 /**
  * 发送 Bark 通知
  */
-export const sendBarkNotification = async (
-  title: string,
-  message: string
-): Promise<boolean> => {
+export const sendBarkNotification = async (title: string, message: string): Promise<boolean> => {
   if (!BARK_CONFIG.key) {
     logger.debug('Bark Key 未配置，跳过通知');
     return false;
@@ -81,10 +78,7 @@ export const sendTelegramNotification = async (
 /**
  * 发送企业微信通知
  */
-export const sendWeComNotification = async (
-  title: string,
-  message: string
-): Promise<boolean> => {
+export const sendWeComNotification = async (title: string, message: string): Promise<boolean> => {
   const { webhookUrl } = NOTIFICATION_CONFIG.wecom;
 
   if (!webhookUrl) {
@@ -138,10 +132,7 @@ export const sendAllNotifications = async (
 /**
  * 发送错误通知
  */
-export const sendErrorNotification = async (
-  context: string,
-  error: Error
-): Promise<void> => {
+export const sendErrorNotification = async (context: string, error: Error): Promise<void> => {
   const title = `${context} 运行失败`;
   const message = error.message;
 
@@ -152,10 +143,7 @@ export const sendErrorNotification = async (
 /**
  * 发送成功通知
  */
-export const sendSuccessNotification = async (
-  context: string,
-  message: string
-): Promise<void> => {
+export const sendSuccessNotification = async (context: string, message: string): Promise<void> => {
   const title = `${context} 运行成功`;
   await sendAllNotifications(title, message);
 };
@@ -173,17 +161,13 @@ export const sendNotification = async (
     return;
   }
 
-  for (const channel of channels) {
-    switch (channel) {
-      case 'bark':
-        await sendBarkNotification(title, message);
-        break;
-      case 'telegram':
-        await sendTelegramNotification(title, message);
-        break;
-      case 'wecom':
-        await sendWeComNotification(title, message);
-        break;
-    }
-  }
+  const channelFns: Record<string, () => Promise<boolean>> = {
+    bark: () => sendBarkNotification(title, message),
+    telegram: () => sendTelegramNotification(title, message),
+    wecom: () => sendWeComNotification(title, message),
+  };
+
+  await Promise.allSettled(
+    channels.map(channel => channelFns[channel]?.() ?? Promise.resolve(false))
+  );
 };

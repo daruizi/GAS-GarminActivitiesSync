@@ -109,8 +109,9 @@ export const createGarminClient = async (region: GarminRegion): Promise<GarminCl
       // Session 失效，重新登录
       logger.warn(`${region}: Session 已失效，重新登录...`);
       await client.login(config.username, config.password);
-      await updateSession(region, client.exportToken());
     }
+    // 无论是加载成功还是重新登录，都更新 Session 以刷新 token 过期时间
+    await updateSession(region, client.exportToken());
   }
 
   // 验证登录
@@ -133,25 +134,32 @@ export const createGarminClient = async (region: GarminRegion): Promise<GarminCl
 /**
  * 下载活动原始数据
  */
+// 缓存下载目录创建状态，避免每次下载都调用 existsSync
+let downloadDirCreated = false;
+
 export const downloadActivity = async (
   activityId: number,
   client: GarminClient
 ): Promise<string> => {
   const dir = FILE_CONFIG.DOWNLOAD_DIR;
 
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  if (!downloadDirCreated) {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    downloadDirCreated = true;
   }
 
   // 使用速率限制器控制下载频率
-  const activity = await defaultRateLimiter.executeWithRateLimit(() =>
-    client.getActivity({ activityId })
-  );
+  // 直接传 activityId 构造的对象，避免多余的 getActivity() API 请求
   await defaultRateLimiter.executeWithRateLimit(() =>
-    client.downloadOriginalActivityData(activity, dir)
+    client.downloadOriginalActivityData(
+      { activityId } as Parameters<typeof client.downloadOriginalActivityData>[0],
+      dir
+    )
   );
 
-  const zipFile = `${dir}/${activityId}.zip`;
+  const zipFile = path.join(dir, `${activityId}.zip`);
   const unzipped = await decompress(zipFile, dir);
   const fileName = unzipped?.[0]?.path;
 
@@ -159,7 +167,7 @@ export const downloadActivity = async (
     throw new Error(`解压失败: ${activityId}`);
   }
 
-  const filePath = `${dir}/${fileName}`;
+  const filePath = path.join(dir, fileName);
   logger.debug(`下载完成: ${filePath}`);
 
   return filePath;
