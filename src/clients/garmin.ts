@@ -150,24 +150,51 @@ export const downloadActivity = async (
     downloadDirCreated = true;
   }
 
-  // 使用速率限制器控制下载频率
-  // 直接传 activityId 构造的对象，避免多余的 getActivity() API 请求
-  await defaultRateLimiter.executeWithRateLimit(() =>
-    client.downloadOriginalActivityData(
-      { activityId } as Parameters<typeof client.downloadOriginalActivityData>[0],
-      dir
-    )
-  );
+  // 尝试按序下载不同的格式，优先下载原版zip(内含fit)
+  const typesToTry = ['zip', 'tcx', 'gpx'] as const;
 
-  const zipFile = path.join(dir, `${activityId}.zip`);
-  const unzipped = await decompress(zipFile, dir);
-  const fileName = unzipped?.[0]?.path;
+  let downloadedType = '';
+  let lastError: any;
 
-  if (!fileName) {
-    throw new Error(`解压失败: ${activityId}`);
+  for (const type of typesToTry) {
+    try {
+      await defaultRateLimiter.executeWithRateLimit(() =>
+        client.downloadOriginalActivityData({ activityId } as any, dir, type)
+      );
+      downloadedType = type;
+      break; // 成功则跳出循环
+    } catch (err: any) {
+      lastError = err;
+      const errMsg = String(err);
+      if (errMsg.includes('404') || errMsg.includes('Not Found')) {
+        logger.debug(`活动 ${activityId} 下载 ${type} 格式返回 404，尝试下一种格式...`);
+        continue;
+      }
+      throw err; // 其他严重报错直接抛出
+    }
   }
 
-  const filePath = path.join(dir, fileName);
+  if (!downloadedType) {
+    throw lastError || new Error(`所有格式下载均失败: ${activityId}`);
+  }
+
+  let filePath = '';
+
+  if (downloadedType === 'zip') {
+    // 解压 ZIP 获取实际文件
+    const zipFile = path.join(dir, `${activityId}.zip`);
+    const unzipped = await decompress(zipFile, dir);
+    const fileName = unzipped?.[0]?.path;
+
+    if (!fileName) {
+      throw new Error(`解压失败: ${activityId}`);
+    }
+    filePath = path.join(dir, fileName);
+  } else {
+    // tcx 或 gpx 直接是该文件
+    filePath = path.join(dir, `${activityId}.${downloadedType}`);
+  }
+
   logger.debug(`下载完成: ${filePath}`);
 
   return filePath;
