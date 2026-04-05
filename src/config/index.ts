@@ -34,16 +34,16 @@ export const GARMIN_CONFIG = {
   },
   // 同步配置
   sync: {
-    num: parseInt(process.env.GARMIN_SYNC_NUM || '10', 10),
-    delay: parseInt(process.env.GARMIN_SYNC_DELAY || '2000', 10),
+    num: Number(process.env.GARMIN_SYNC_NUM) || 10,
+    delay: Number(process.env.GARMIN_SYNC_DELAY) || 2000,
   },
   // 迁移配置
   migrate: {
-    num: parseInt(process.env.GARMIN_MIGRATE_NUM || '200', 10),
-    start: parseInt(process.env.GARMIN_MIGRATE_START || '0', 10),
+    num: Number(process.env.GARMIN_MIGRATE_NUM) || 200,
+    start: Number(process.env.GARMIN_MIGRATE_START) || 0,
   },
   // HTTP 请求超时配置（毫秒）
-  timeout: parseInt(process.env.GARMIN_REQUEST_TIMEOUT || '30000', 10),
+  timeout: Number(process.env.GARMIN_REQUEST_TIMEOUT) || 30000,
 };
 
 // Garmin URL 配置（仅保留使用的属性）
