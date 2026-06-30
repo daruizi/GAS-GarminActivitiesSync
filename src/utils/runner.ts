@@ -6,6 +6,7 @@ import { sendErrorNotification, sendSuccessNotification } from '../services/noti
 import { validateAllConfig } from './validation';
 import { checkAESKey } from './crypto';
 import { initDB, closeDB } from './database';
+import { initSyncHealthTable } from './syncHealth';
 import { logger } from './logger';
 
 export interface TaskResult {
@@ -49,8 +50,9 @@ export const runTask = async (taskName: string, task: () => Promise<TaskResult>)
     // 一次性校验 AES Key（缓存结果，后续 encrypt/decrypt 不再重复校验）
     checkAESKey();
 
-    // 一次性初始化数据库
+    // 一次性初始化数据库和同步健康度表
     await initDB();
+    await initSyncHealthTable();
 
     // 执行任务
     const result = await task();

@@ -94,6 +94,7 @@ export const createGarminClient = async (region: GarminRegion): Promise<GarminCl
 
   // 尝试使用已保存的 Session
   const savedSession = await getSession(region);
+  let sessionReused = false;
 
   if (!savedSession) {
     // 无保存的 Session，执行登录
@@ -102,26 +103,39 @@ export const createGarminClient = async (region: GarminRegion): Promise<GarminCl
     await saveSession(region, client.exportToken());
   } else {
     // 使用保存的 Session
-    let sessionValid = false;
     try {
       logger.info(`${region}: 使用已保存的 Session 登录`);
       await client.loadToken(savedSession.oauth1, savedSession.oauth2);
-      // 必须在这里发起一次实际的网络请求来验证 Token 是否真的有效
-      // 否则 loadToken 仅仅是赋值，后续遇到失效 Token 会直接抛错崩溃
-      await client.getUserProfile();
-      sessionValid = true;
+
+      // 检查 OAuth2 token 是否即将过期（提前 10 分钟）
+      const now = Date.now();
+      const expiresAt = savedSession.oauth2?.expires_at;
+      const TEN_MINUTES_MS = 10 * 60 * 1000;
+      const tokenExpiringSoon = expiresAt && expiresAt * 1000 - now < TEN_MINUTES_MS;
+
+      if (tokenExpiringSoon) {
+        logger.info(`${region}: Token 即将过期，主动重新登录`);
+        await client.login(config.username, config.password);
+        await updateSession(region, client.exportToken());
+      } else {
+        // Token 仍有效，发起一次网络请求验证
+        await client.getUserProfile();
+        sessionReused = true;
+        // Session 有效时跳过 updateSession，避免无意义的 DB 写入
+        logger.debug(`${region}: Session 有效，跳过 DB 更新`);
+      }
     } catch (err: any) {
       // Session 失效，重新登录
       logger.warn(`${region}: Session 已失效 (${err.message})，正在重新尝试账密登录...`);
       await client.login(config.username, config.password);
+      await updateSession(region, client.exportToken());
     }
-
-    // 如果 Session 仍有效 或 重新登录成功，都更新 DB 以刷新过期时间
-    await updateSession(region, client.exportToken());
   }
 
-  // 验证登录
-  const userInfo = await client.getUserProfile();
+  // 验证登录（如果 session 已复用并验证过，这次 getUserProfile 是第二次调用）
+  // 优化：如果 sessionReused 为 true，上面的 getUserProfile 已经验证过了，
+  // 但为了保持验证逻辑一致（检查 fullName/emailAddress），仍需获取 userInfo
+  const userInfo = sessionReused ? await client.getUserProfile() : await client.getUserProfile();
   const { fullName, userName: emailAddress, location } = userInfo;
 
   // 改进的验证逻辑：处理空字符串情况

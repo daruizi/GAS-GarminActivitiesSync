@@ -13,6 +13,8 @@
     "migrate:cn2global": "ts-node src/migrate_garmin_cn_to_global.ts",
     "migrate:global2cn": "ts-node src/migrate_garmin_global_to_cn.ts",
     "rq": "ts-node src/rq.ts",
+    "health:global2cn": "ts-node src/health_check.ts GLOBAL2CN",
+    "health:cn2global": "ts-node src/health_check.ts CN2GLOBAL",
     "watch": "tsc -w",
     "test": "vitest run",
     "test:watch": "vitest",

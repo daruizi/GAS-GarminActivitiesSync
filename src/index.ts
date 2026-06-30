@@ -29,3 +29,5 @@ export * from './utils/runner';
 export * from './utils/validation';
 export * from './utils/rateLimiter';
 export * from './utils/retry';
+export * from './utils/preflight';
+export * from './utils/syncHealth';

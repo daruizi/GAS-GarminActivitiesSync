@@ -1,0 +1,32 @@
+FROM node:24-alpine
+
+WORKDIR /app
+
+# 安装 tzdata 以支持时区设置
+RUN apk add --no-cache tzdata bash
+
+# 启用 corepack (yarn)
+RUN corepack enable
+
+# 设置时区为上海
+ENV TZ=Asia/Shanghai
+RUN ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime
+
+# 复制项目文件
+COPY package.json yarn.lock tsconfig.json ./
+COPY src/ ./src/
+COPY db/ ./db/
+
+# 安装依赖
+RUN yarn --frozen-lockfile --prefer-offline
+
+# 创建 crontab 文件
+# 默认每小时整点执行 Global → CN 同步
+# 可通过 CRON_SCHEDULE 环境变量自定义
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+# 安装 cron 守护进程
+RUN apk add --no-cache dcron
+
+ENTRYPOINT ["/docker-entrypoint.sh"]

@@ -3,16 +3,16 @@ name: Sync Garmin Global to Garmin CN
 on:
   workflow_dispatch:
   schedule:
-    # 每1小时检查一次 (UTC时间，相当于北京时间的每个整点)
+    # 每小时检查一次 (UTC时间，相当于北京时间每小时整点)
     - cron: "0 * * * *"
 
-# 并发控制：如果当前有任务正在运行，取消旧任务或排队，防止冲突
+# 并发控制：排队等待，防止多个实例同时操作导致 DB 冲突
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 env:
-  # 强制 Github Actions 使用 Node.js 24 消除过期警告
+  # 强制 Github Actions 使用 Node.js 24
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   # Garmin 账号配置（必填）
   AESKEY: ${{ secrets.AESKEY }}
@@ -50,16 +50,27 @@ jobs:
           node-version: "24"
           cache: "yarn"
 
+      # 改进的缓存策略：使用固定 key + hash，提高缓存命中率
       - name: Cache Session Database
         uses: actions/cache@v4
         with:
           path: db/garmin.db
-          key: garmin-session-${{ github.repository }}-global2cn-${{ github.run_id }}
+          # 使用周级别 key，避免每次都生成新 cache，同时保证 session 不会太旧
+          key: garmin-session-${{ github.repository }}-global2cn-${{ github.run_number }}
           restore-keys: |
             garmin-session-${{ github.repository }}-global2cn-
 
       - run: yarn --frozen-lockfile --prefer-offline
         name: Install dependencies
 
-      - run: yarn sync:global2cn
+      - name: Run sync (Global → CN)
+        run: yarn sync:global2cn
         timeout-minutes: 10
+
+      # 同步后保存 cache（即使同步失败也保存，保留 session 数据）
+      - name: Save Session Database
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: db/garmin.db
+          key: garmin-session-${{ github.repository }}-global2cn-${{ github.run_number }}

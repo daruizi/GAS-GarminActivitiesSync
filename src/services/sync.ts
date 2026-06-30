@@ -20,6 +20,12 @@ import {
   getMigrationProgress,
   saveMigrationProgress,
 } from '../utils/database';
+import { runPreflight } from '../utils/preflight';
+import {
+  recordSyncSuccess,
+  recordSyncFailure,
+  shouldPauseDueToFailures,
+} from '../utils/syncHealth';
 
 /**
  * 重试配置
@@ -39,6 +45,22 @@ export const syncActivities = async (
   sourceRegion: GarminRegion,
   targetRegion: GarminRegion
 ): Promise<SyncResult> => {
+  // ===== 预检：检查连续失败次数，必要时暂停 =====
+  const pauseCheck = await shouldPauseDueToFailures(sourceRegion, targetRegion);
+  if (pauseCheck.shouldPause) {
+    const message = `连续失败 ${pauseCheck.consecutiveFailures} 次，暂停同步以避免触发风控。请检查账号和网络后手动恢复。`;
+    logger.error(message);
+    return { success: false, count: 0, message };
+  }
+
+  // ===== 预检：网络连通性 =====
+  try {
+    await runPreflight(sourceRegion, targetRegion);
+  } catch (preflightError) {
+    await recordSyncFailure(sourceRegion, targetRegion, `预检失败: ${preflightError}`);
+    throw preflightError;
+  }
+
   const sourceClient = await createGarminClient(sourceRegion);
 
   const syncNum = GARMIN_CONFIG.sync.num;
@@ -53,6 +75,7 @@ export const syncActivities = async (
   if (sourceActs.length === 0) {
     const message = '源区域没有活动数据';
     logger.info(message);
+    await recordSyncSuccess(sourceRegion, targetRegion, 0);
     return { success: true, count: 0, message };
   }
 
@@ -62,8 +85,11 @@ export const syncActivities = async (
   if (actsToSync.length === 0) {
     const message = `没有要同步的活动，最近的活动: [${sourceActs[0].activityName}]，开始于: [${sourceActs[0].startTimeLocal}]`;
     logger.info(message);
+    await recordSyncSuccess(sourceRegion, targetRegion, 0);
     return { success: true, count: 0, message };
   }
+
+  logger.info(`发现 ${actsToSync.length} 条新活动需要同步`);
 
   // 惰性创建目标客户端：仅在确认有活动需要同步时才登录目标区域
   // 避免无活动时浪费一次完整的登录 + getUserProfile 往返
@@ -72,57 +98,66 @@ export const syncActivities = async (
   const syncedActivities: string[] = [];
   let count = 0;
 
-  for (const act of actsToSync) {
-    count++;
-    logger.info(
-      `同步第 ${number2capital(count)} 条: [${act.activityName}]，开始于 [${act.startTimeLocal}]`
-    );
-
-    let filePath = '';
-
-    try {
-      // 使用统一重试机制下载并上传
-      filePath = await withRetry(
-        () => downloadActivity(act.activityId, sourceClient),
-        RETRY_CONFIG,
-        `下载 ${act.activityName}`
+  try {
+    for (const act of actsToSync) {
+      count++;
+      logger.info(
+        `同步第 ${number2capital(count)} 条: [${act.activityName}]，开始于 [${act.startTimeLocal}]`
       );
 
-      await withRetry(
-        () => uploadActivity(filePath, targetClient),
-        RETRY_CONFIG,
-        `上传 ${act.activityName}`
-      );
+      let filePath = '';
 
-      // 记录已同步的活动 ID
-      await saveSyncedActivity(act.activityId, sourceRegion, targetRegion);
-      syncedActivities.push(act.activityName);
-    } catch (error) {
-      const errMsg = String(error);
-      // 409 Conflict 表示活动在目标端已存在，标记为已同步并继续
-      if (errMsg.includes('409') || errMsg.includes('Conflict')) {
-        logger.warn(`活动 [${act.activityName}] 在目标端已存在（409 Conflict），标记为已同步`);
+      try {
+        // 使用统一重试机制下载并上传
+        filePath = await withRetry(
+          () => downloadActivity(act.activityId, sourceClient),
+          RETRY_CONFIG,
+          `下载 ${act.activityName}`
+        );
+
+        await withRetry(
+          () => uploadActivity(filePath, targetClient),
+          RETRY_CONFIG,
+          `上传 ${act.activityName}`
+        );
+
+        // 记录已同步的活动 ID
         await saveSyncedActivity(act.activityId, sourceRegion, targetRegion);
         syncedActivities.push(act.activityName);
-      } else {
-        // 其他错误仍然抛出
-        throw error;
+      } catch (error) {
+        const errMsg = String(error);
+        // 409 Conflict 表示活动在目标端已存在，标记为已同步并继续
+        if (errMsg.includes('409') || errMsg.includes('Conflict')) {
+          logger.warn(`活动 [${act.activityName}] 在目标端已存在（409 Conflict），标记为已同步`);
+          await saveSyncedActivity(act.activityId, sourceRegion, targetRegion);
+          syncedActivities.push(act.activityName);
+        } else {
+          // 其他错误仍然抛出
+          throw error;
+        }
+      } finally {
+        // 无论成功失败，都清理临时文件
+        if (filePath) {
+          cleanupDownloadedFiles(filePath, act.activityId);
+        }
       }
-    } finally {
-      // 无论成功失败，都清理临时文件
-      if (filePath) {
-        cleanupDownloadedFiles(filePath, act.activityId);
+
+      // 延迟避免请求过快（最后一条不需要延迟）
+      if (count < actsToSync.length) {
+        await delay(syncDelay);
       }
     }
 
-    // 延迟避免请求过快（最后一条不需要延迟）
-    if (count < actsToSync.length) {
-      await delay(syncDelay);
-    }
+    // 记录同步成功
+    await recordSyncSuccess(sourceRegion, targetRegion, count);
+  } catch (error) {
+    // 记录同步失败
+    await recordSyncFailure(sourceRegion, targetRegion, String(error));
+    throw error;
+  } finally {
+    // 清理整个下载目录
+    cleanupDownloadDir();
   }
-
-  // 清理整个下载目录
-  cleanupDownloadDir();
 
   const message = `同步完成，共 ${count} 条活动`;
   logger.success(message);
