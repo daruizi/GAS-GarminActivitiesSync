@@ -411,7 +411,7 @@ GarminActivitiesSync/
 │   ├── types/                  # TypeScript 类型定义
 │   ├── health_check.ts         # 🆕 健康度查看命令
 │   └── index.ts                # 入口文件
-├── tests/                      # 单元测试（51 个测试用例）
+├── tests/                      # 单元测试（77 个测试用例）
 ├── db/                         # SQLite 数据库文件
 ├── Dockerfile                  # Docker 手动执行镜像
 ├── Dockerfile.cron             # 🆕 Docker 定时同步镜像
@@ -462,6 +462,15 @@ ping sso.garmin.cn
 4. **Session 过期**：删除仓库中的 `db/garmin.db` 文件重新登录
 5. **连续失败暂停**：查看健康度 (`yarn health:global2cn`)，确认连续失败次数
 
+### Q: 同步日志出现 `HTTP Error (400): Bad Request` / `/preauthorized` 怎么办？
+
+这表示 Garmin 登录端点拒绝了完整 SSO 登录（通常因短时间内频繁登录触发风控）。v2.4.1 已修复 v2.4.0 中每小时触发完整登录的回归——正常情况下 access token 过期会通过 refresh token 静默续期（走 `/exchange/user/2.0`），不会命中 `/preauthorized`。如仍出现：
+
+1. 确认已更新到 **v2.4.1+**
+2. 删除 `db/garmin.db` 中的旧 session（让下次运行重新登录）：`rm db/garmin.db`
+3. 若账号被 Garmin 临时锁定，等待一段时间（通常数小时）后重试
+4. 查看健康度 `yarn health:global2cn` 确认连续失败次数
+
 ### Q: 同步被自动暂停了怎么办？
 
 如果看到 "连续失败 X 次，暂停同步" 的消息：
@@ -511,6 +520,17 @@ CRON_SCHEDULE=0 */2 * * *  # 每 2 小时执行一次
 ---
 
 ## 更新日志
+
+### v2.4.1 (2026-07-01)
+
+**Bug 修复：**
+
+- 🐛 **修复 v2.4.0 引入的 session 续期回归，恢复 hourly 同步**：v2.4.0 的 `tokenExpiringSoon` 分支在 access token 过期时主动调用 `client.login()`，触发完整 SSO 登录命中 `/oauth-service/oauth/preauthorized` 端点。由于每小时整点运行、而 access token 寿命仅约 30 分钟，该分支每次运行都会触发一次完整账密登录，连续多次后 Garmin 登录端点以 400 Bad Request 拒绝（登录风控），导致 2026-06-30 22:16 UTC 起所有 hourly 同步连续失败。现已还原为 v2.3.0 的 refresh-token 续期路径：`loadToken` + `getUserProfile`，access token 过期由 garmin-connect 库的 401 拦截器自动用 refresh token 刷新（走 `/oauth-service/oauth/exchange/user/2.0`，复用长寿命 OAuth1 token，不碰 `/preauthorized`），仅在 refresh 真正失效时才回退到完整账密 `login()`。
+
+**测试：**
+
+- ✅ 新增 5 个回归测试（`tests/garmin.test.ts`），锁定 session 续期分支：access token 过期时不触发完整 `login()`、仅 refresh 失效时才回退。已实证该测试在 v2.4.0 代码上失败、在 v2.4.1 上通过，可防止回归再次发生。
+- ✅ 测试总数 72 → 77，全部通过；TypeScript 编译零错误。
 
 ### v2.4.0 (2026-06-30)
 
@@ -603,4 +623,4 @@ CRON_SCHEDULE=0 */2 * * *  # 每 2 小时执行一次
 
 感谢以下 AI 工具的帮助，本项目展示了 AI 辅助编程的能力，从代码审查、问题诊断到修复实现，全程由 AI 完成：
 - **[Antigravity]** - v2.3.0 核心逻辑重构、去重机制升级、GitHub Actions 自动化测试与发版
-- **[Claude Code]** - v2.4.0 可靠性增强、健康度监控、Docker 定时同步、代码验证
+- **[Claude Code]** - v2.4.0 可靠性增强、健康度监控、Docker 定时同步、代码验证；v2.4.1 session 续期回归修复

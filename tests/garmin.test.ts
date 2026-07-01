@@ -11,12 +11,10 @@ const mocks = vi.hoisted(() => ({
     loadToken: vi.fn(),
     getUserProfile: vi.fn(),
     login: vi.fn(),
-    exportToken: vi
-      .fn()
-      .mockReturnValue({
-        oauth1: { oauth_token: 'a', oauth_token_secret: 'b' },
-        oauth2: { access_token: 't' },
-      }),
+    exportToken: vi.fn().mockReturnValue({
+      oauth1: { oauth_token: 'a', oauth_token_secret: 'b' },
+      oauth2: { access_token: 't' },
+    }),
   },
 }));
 
@@ -61,6 +59,12 @@ vi.mock('../src/utils/rateLimiter', () => ({
   defaultRateLimiter: { executeWithRateLimit: vi.fn((fn: () => Promise<unknown>) => fn()) },
 }));
 
+// ⚠️ 测试边界说明：本套件将 garmin-connect 整体 mock，因此库的 401 拦截器 /
+// refreshOauth2Token → POST /exchange/user/2.0 真实刷新路径【不】被单元测试覆盖。
+// 此处只验证项目的 session 续期【分支逻辑】（access token 过期不主动 login、仅 refresh
+// 失效时才回退）。真实刷新路径由 CI 端到端 hourly 运行覆盖
+// （.github/workflows/sync_garmin_global_to_garmin_cn.yml）；库版本由 yarn.lock 锁定，
+// 避免升级时拦截器行为变更导致「测试通过但生产失效」。
 import { createGarminClient } from '../src/clients/garmin';
 
 describe('createGarminClient - session 续期路径', () => {
@@ -115,6 +119,20 @@ describe('createGarminClient - session 续期路径', () => {
     expect(mocks.client.login).toHaveBeenCalledTimes(1);
     expect(mocks.client.login).toHaveBeenCalledWith('g@test.com', 'pw');
     expect(mocks.db.updateSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('catch 中 login() 也失败时，错误向上抛出且不调用 updateSession', async () => {
+    mocks.db.getSession.mockResolvedValue({
+      oauth1: { oauth_token: 'a', oauth_token_secret: 'b' },
+      oauth2: { access_token: 'old', expires_at: 1000 },
+    });
+    mocks.client.getUserProfile.mockRejectedValueOnce(new Error('HTTP Error (400): Bad Request'));
+    mocks.client.login.mockRejectedValue(new Error('login also fails'));
+
+    await expect(createGarminClient('GLOBAL')).rejects.toThrow('login also fails');
+    expect(mocks.client.login).toHaveBeenCalledTimes(1);
+    // login 抛错 → updateSession 不应被调用（防止错误被吞掉后写入脏 session）
+    expect(mocks.db.updateSession).not.toHaveBeenCalled();
   });
 
   it('无保存 session 时执行首次 login() 并 saveSession', async () => {
