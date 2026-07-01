@@ -94,7 +94,6 @@ export const createGarminClient = async (region: GarminRegion): Promise<GarminCl
 
   // 尝试使用已保存的 Session
   const savedSession = await getSession(region);
-  let sessionReused = false;
 
   if (!savedSession) {
     // 无保存的 Session，执行登录
@@ -106,36 +105,28 @@ export const createGarminClient = async (region: GarminRegion): Promise<GarminCl
     try {
       logger.info(`${region}: 使用已保存的 Session 登录`);
       await client.loadToken(savedSession.oauth1, savedSession.oauth2);
-
-      // 检查 OAuth2 token 是否即将过期（提前 10 分钟）
-      const now = Date.now();
-      const expiresAt = savedSession.oauth2?.expires_at;
-      const TEN_MINUTES_MS = 10 * 60 * 1000;
-      const tokenExpiringSoon = expiresAt && expiresAt * 1000 - now < TEN_MINUTES_MS;
-
-      if (tokenExpiringSoon) {
-        logger.info(`${region}: Token 即将过期，主动重新登录`);
-        await client.login(config.username, config.password);
-        await updateSession(region, client.exportToken());
-      } else {
-        // Token 仍有效，发起一次网络请求验证
-        await client.getUserProfile();
-        sessionReused = true;
-        // Session 有效时跳过 updateSession，避免无意义的 DB 写入
-        logger.debug(`${region}: Session 有效，跳过 DB 更新`);
-      }
+      // 发起一次实际网络请求验证 Token。若 access token 已过期，garmin-connect 库的
+      // 401 拦截器会自动用 refresh token / OAuth1 token 刷新（走
+      // /oauth-service/oauth/exchange/user/2.0，复用长寿命 OAuth1 token）。
+      //
+      // ⚠️ 切勿因「access token 即将过期」而主动调用 client.login(user, password)：
+      // login() 会走完整 SSO 流程并命中 /oauth-service/oauth/preauthorized 端点。
+      // 由于每小时整点运行、而 access token 寿命仅约 30 分钟，主动 login 会让每次
+      // 运行都触发一次完整 SSO，连续多次后 Garmin 登录端点会以 400 Bad Request 拒绝
+      // （登录风控），导致同步连续失败。续期应交由上面的 401 拦截器处理。
+      // （v2.4.0 曾引入此回归，v2.4.1 还原为 refresh-token 续期路径。）
+      await client.getUserProfile();
     } catch (err: any) {
-      // Session 失效，重新登录
+      // Session 完全失效（refresh token / OAuth1 token 也被 Garmin 拒绝），回退到完整账密登录
       logger.warn(`${region}: Session 已失效 (${err.message})，正在重新尝试账密登录...`);
       await client.login(config.username, config.password);
-      await updateSession(region, client.exportToken());
     }
+    // Session 有效（可能已被拦截器刷新）或重新登录成功，都更新 DB 以刷新过期时间
+    await updateSession(region, client.exportToken());
   }
 
-  // 验证登录（如果 session 已复用并验证过，这次 getUserProfile 是第二次调用）
-  // 优化：如果 sessionReused 为 true，上面的 getUserProfile 已经验证过了，
-  // 但为了保持验证逻辑一致（检查 fullName/emailAddress），仍需获取 userInfo
-  const userInfo = sessionReused ? await client.getUserProfile() : await client.getUserProfile();
+  // 验证登录（获取 userInfo 以校验 fullName / emailAddress）
+  const userInfo = await client.getUserProfile();
   const { fullName, userName: emailAddress, location } = userInfo;
 
   // 改进的验证逻辑：处理空字符串情况
