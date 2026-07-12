@@ -2,6 +2,23 @@
 
 让「佳明国际 → 佳明中国」的同步从每小时轮询变成**新活动出现后 1–3 分钟内自动触发**，不再依赖固定 cron 周期。
 
+## 设计思路
+
+出发点很简单：轮询周期越短，越接近实时，但代价是登录/请求次数线性增加，而 Garmin 的非官方接口对高频登录很敏感（v2.4.0 就因为一个 session 续期回归，在 hourly 频率下触发过一次真实的登录风控故障，见主 README 更新日志）。真正的事件驱动需要一个"新活动出现了"的信号源，而不是"猜多久问一次"。
+
+逐条推演可选方案：
+
+- **Garmin 官方 Push API**：只对企业合作伙伴开放，个人开发者拿不到，直接排除。
+- **本地常驻轮询守护**（node-cron + 任务计划自启）：需要电脑 24 小时开机，且轮询频率从"每天 24 次"变成"每天上千次"才能逼近实时，登录风控风险不降反升，还重复造了 GitHub 已有的免费基础设施。技术上可行，但性价比低，仅作为文末备选项保留。
+- **Strava Webhook 作为"门铃"**：Garmin Connect 国际本身就会把每条新活动自动推送到 Strava（官方功能，秒级），而 Strava 提供标准的 push webhook。于是可以完全不碰 Garmin 的登录接口，只监听 Strava 的事件作为"有新活动了"的信号，实际数据仍然从 Garmin Global 直接拉取——**Strava 只当门铃，不参与数据搬运**。这样毫秒级信号 + 零额外 Garmin 请求，是三个方案里唯一同时满足"实时"和"不增加风控面"的。
+
+选定 Strava 之后的几个从属决策：
+
+- **同步执行器不换**：现有 GitHub Actions workflow（`yarn sync:global2cn`）已经跑得很稳，secrets 也配好了，没有理由重新实现一遍。要改的只是"谁来触发它"，不是"谁来执行它"——所以选 `repository_dispatch`，一个 API 调用就能远程点火现有 workflow，同步逻辑（`src/services/sync.ts` 的去重、409 容忍、session 续期）完全不动。
+- **触发层用 Cloudflare Worker，不是别的**：需要一个能收 Strava webhook 的公网 HTTP 端点。免费、免运维、冷启动够快（Strava 给 2 秒响应窗口）、不需要额外账号体系——比自建服务器或用现有的 Actions 里跑 HTTP server（GitHub Actions 本身不支持长驻监听）更合适。
+- **鉴权用路径当密钥**：Strava webhook 投递没有请求签名机制，用一段随机路径（`WEBHOOK_PATH`）取代传统的 API Key header，成本几乎为零但足够挡住扫描器。
+- **每日兜底不能省**：webhook 投递不是 100% 可靠（Strava 官方文档写明非 2xx 最多重试 3 次就放弃），完全依赖事件驱动会有漏网风险。保留一次低频兜底同步，把"漏网"的后果从"可能永久漏掉"降到"最多等到第二天"。
+
 ## 架构
 
 ```
@@ -13,6 +30,20 @@ Garmin 设备 → Garmin Connect 国际（官方推送，秒级）→ Strava
 Strava 在这条链路里只是「门铃」——我们从不读取任何 Strava 活动数据，同步逻辑仍然直接从 Garmin Global 拉取 FIT 原始文件并上传到 Garmin CN（`src/services/sync.ts` 完全不变）。
 
 每日仍保留一次低频兜底同步（`.github/workflows/sync_garmin_global_to_garmin_cn.yml` 里的 `schedule`），用于接住 webhook 偶尔漏掉的事件。
+
+## 实施计划
+
+按以下顺序落地，每一步都是独立可回滚的：
+
+| 阶段 | 内容 | 产出 |
+|---|---|---|
+| 0. 安全清理 | 排查 `db/garmin.db` 是否仍是活跃持久化机制（结论：不是，已被 `actions/cache` 取代），untrack 掉这个遗留文件 | 1 次提交 |
+| 1. Workflow 触发器改造 | `sync_garmin_global_to_garmin_cn.yml` 加 `repository_dispatch: [new_activity]`；`schedule` 从每小时降为每日 00:30 UTC 兜底；不改动既有的 session cache 逻辑 | 1 次提交 |
+| 2. Cloudflare Worker 开发 | 单文件纯 JS Worker：GET 做 Strava 订阅验证握手，POST 过滤 `activity create` 事件并异步触发 `repository_dispatch` | `trigger/worker.js` + `wrangler.toml` |
+| 3. 一次性人工配置 | Strava 应用凭据、OAuth 自授权、GitHub PAT、Cloudflare 登录部署、Worker secrets 写入、创建 Strava 订阅（完整步骤见下方「一次性配置步骤」） | 线上 Worker + 有效订阅 |
+| 4. 端到端验证 | 手动 `repository_dispatch` 触发 → 确认 workflow 正常跑完；GET/POST 分别测试 Worker 的鉴权、过滤、去重逻辑 | 验证清单见下方 |
+
+落地过程中踩过一个坑：曾计划加 `gautamkrishnar/keepalive-workflow` action 防止 60 天无提交导致 `schedule` 被 GitHub 自动禁用，实测该 action 仓库已不可解析（GitHub 返回 `Repository access blocked`，每次运行直接失败在 "Set up job"），已移除——60 天保活退化为"依赖仓库持续活跃 + GitHub 禁用前的邮件预警"，只影响每日兜底，不影响 `repository_dispatch`。
 
 ## 前置条件
 
@@ -133,12 +164,14 @@ curl -X DELETE "https://www.strava.com/api/v3/push_subscriptions/<订阅ID>?clie
 
 ## 验证清单
 
+> ✅ 以下第 1、3 步已于 2026-07-12 实测通过：手动 `repository_dispatch` → workflow 成功触发 → session 复用登录（0.79 秒完成，未触发完整账密重登录）→ 正确识别「没有要同步的活动」（去重生效）；Worker 线上 GET 验证握手、POST 事件过滤（create/update/他人 owner_id）均按预期返回；Strava 订阅创建成功（GET 握手在生产环境走通）。
+
 1. **不依赖 Strava，先验证 workflow 触发链路**：
    ```bash
    gh api repos/daruizi/GAS-GarminActivitiesSync/dispatches -f event_type=new_activity
    gh run list --workflow=sync_garmin_global_to_garmin_cn.yml --limit 3
    ```
-   应看到一条由 `repository_dispatch` 触发的新运行，日志里能看到 "Log trigger source" 步骤（本次是手动模拟，`client_payload` 为空也没关系）以及正常的同步日志。同时确认 "Restore Session Cache" 的 post 步骤保存了一个带新 `run_id` 的新 cache。
+   应看到一条由 `repository_dispatch` 触发的新运行，日志里能看到 "Log trigger source" 步骤（本次是手动模拟，`client_payload` 为空也没关系）以及正常的同步日志。同时确认 "Cache Session Database" / "Save Session Database" 两个步骤正常跑完，保存了带最新 `run_number` 的 cache。
 
 2. **本地测试 Worker**：在 `trigger/` 下创建 `.dev.vars`（已被 .gitignore 排除）填入四个变量，然后：
    ```bash
@@ -175,7 +208,7 @@ curl -X DELETE "https://www.strava.com/api/v3/push_subscriptions/<订阅ID>?clie
 | 重复事件 / Strava 重投 | 多跑一次同步 workflow | SQLite 按 activity_id 去重 + 上传 409 视为已同步，空转约 3 次网络调用 |
 | 非 Garmin 来源的 Strava 活动（手动录入、Zwift 直连等） | 触发一次空转运行 | 无害，Garmin Global 侧没有新活动时直接判定"无需同步" |
 | GitHub PAT 过期 / 被吊销 | dispatch 调用 401，事件驱动失效（Worker 日志可见） | 每日兜底仍正常工作；到期前重新生成并 `wrangler secret put GH_PAT` |
-| 60 天无提交导致 schedule 被 GitHub 自动禁用 | 只影响每日兜底，事件驱动不受影响（`repository_dispatch` 不计入此规则） | workflow 已加入 `keepalive-workflow` action；GitHub 禁用前也会发邮件预警 |
+| 60 天无提交导致 schedule 被 GitHub 自动禁用 | 只影响每日兜底，事件驱动不受影响（`repository_dispatch` 不计入此规则） | 保持仓库有正常提交活动即可重置计时；GitHub 禁用前也会发邮件预警。曾尝试用 `gautamkrishnar/keepalive-workflow` action 自动保活，但该 action 仓库已不可解析会导致运行直接失败，已放弃 |
 
 ## 回滚
 

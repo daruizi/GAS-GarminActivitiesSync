@@ -534,12 +534,15 @@ CRON_SCHEDULE=0 */2 * * *  # 每 2 小时执行一次
 
 **新增功能：**
 
-- ⚡ **事件驱动触发**：`Sync Garmin Global to Garmin CN` 新增 `repository_dispatch` 触发，配合 `trigger/` 目录下的 Cloudflare Worker 监听 Strava 的 "activity create" webhook 事件（Garmin Global 已自动推送活动到 Strava），新活动出现后 1-3 分钟内自动触发同步。原有的每小时 `schedule` 降级为每日 00:30 UTC（北京时间 08:30）兜底同步，接住 webhook 偶尔漏掉的事件
-- 🛡️ **schedule 保活**：新增 `keepalive-workflow` action，防止公开仓库 60 天无提交导致 GitHub 自动禁用 `schedule` 触发（不影响 `repository_dispatch`）
+- ⚡ **事件驱动触发**：`Sync Garmin Global to Garmin CN` 新增 `repository_dispatch` 触发，配合 `trigger/` 目录下的 Cloudflare Worker 监听 Strava 的 "activity create" webhook 事件（Garmin Global 已自动推送活动到 Strava），新活动出现后 1-3 分钟内自动触发同步。原有的每小时 `schedule` 降级为每日 00:30 UTC（北京时间 08:30）兜底同步，接住 webhook 偶尔漏掉的事件。已实测验证：手动触发 `repository_dispatch` → session 复用登录（0.79 秒完成，未触发重登录风控）→ 正确识别去重
 
 **安全清理：**
 
 - 🔒 `db/garmin.db` 不再被 git 跟踪——该文件早已不是实际持久化机制（现由 workflow 中的 `actions/cache` 承担），仅为历史遗留跟踪
+
+**踩坑记录：**
+
+- 曾计划引入第三方 `gautamkrishnar/keepalive-workflow` action 防止 60 天无提交导致 `schedule` 被 GitHub 自动禁用，但该 action 仓库已不可解析（`Repository access blocked`），会导致每次运行直接失败于 "Set up job"。已移除；60 天保活改为依赖仓库持续活跃提交 + GitHub 禁用前的邮件预警（不影响 `repository_dispatch`，只影响每日兜底）
 
 详见 [`trigger/README.md`](./trigger/README.md)。
 
