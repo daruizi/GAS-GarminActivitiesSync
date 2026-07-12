@@ -2,9 +2,11 @@ name: Sync Garmin Global to Garmin CN
 
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types: [new_activity]
   schedule:
-    # 每小时检查一次 (UTC时间，相当于北京时间每小时整点)
-    - cron: "0 * * * *"
+    # 每日兜底：UTC 00:30 = 北京时间 08:30（晨跑结束后，接住 webhook 漏网事件；:30 错峰避开整点调度拥堵）
+    - cron: "30 0 * * *"
 
 # 并发控制：排队等待，防止多个实例同时操作导致 DB 冲突
 concurrency:
@@ -35,6 +37,9 @@ jobs:
     runs-on: ubuntu-latest
     name: Sync Garmin Global to Garmin CN
     timeout-minutes: 15
+    permissions:
+      actions: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,6 +49,13 @@ jobs:
             package.json
             yarn.lock
             tsconfig.json
+
+      - name: Log trigger source
+        if: github.event_name == 'repository_dispatch'
+        run: echo "Triggered by Strava webhook, activity_id=${{ github.event.client_payload.strava_activity_id }}"
+
+      # 防止公开仓库 60 天无提交导致 schedule 触发被 GitHub 自动禁用（不影响 repository_dispatch）
+      - uses: gautamkrishnar/keepalive-workflow@v2
 
       - uses: actions/setup-node@v4
         with:
