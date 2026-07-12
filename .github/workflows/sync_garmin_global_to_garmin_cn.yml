@@ -37,9 +37,6 @@ jobs:
     runs-on: ubuntu-latest
     name: Sync Garmin Global to Garmin CN
     timeout-minutes: 15
-    permissions:
-      actions: write
-      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,9 +50,6 @@ jobs:
       - name: Log trigger source
         if: github.event_name == 'repository_dispatch'
         run: echo "Triggered by Strava webhook, activity_id=${{ github.event.client_payload.strava_activity_id }}"
-
-      # 防止公开仓库 60 天无提交导致 schedule 触发被 GitHub 自动禁用（不影响 repository_dispatch）
-      - uses: gautamkrishnar/keepalive-workflow@v2
 
       - uses: actions/setup-node@v4
         with:
