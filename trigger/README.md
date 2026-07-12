@@ -43,7 +43,12 @@ Strava 在这条链路里只是「门铃」——我们从不读取任何 Strava
 | 3. 一次性人工配置 | Strava 应用凭据、OAuth 自授权、GitHub PAT、Cloudflare 登录部署、Worker secrets 写入、创建 Strava 订阅（完整步骤见下方「一次性配置步骤」） | 线上 Worker + 有效订阅 |
 | 4. 端到端验证 | 手动 `repository_dispatch` 触发 → 确认 workflow 正常跑完；GET/POST 分别测试 Worker 的鉴权、过滤、去重逻辑 | 验证清单见下方 |
 
-落地过程中踩过一个坑：曾计划加 `gautamkrishnar/keepalive-workflow` action 防止 60 天无提交导致 `schedule` 被 GitHub 自动禁用，实测该 action 仓库已不可解析（GitHub 返回 `Repository access blocked`，每次运行直接失败在 "Set up job"），已移除——60 天保活退化为"依赖仓库持续活跃 + GitHub 禁用前的邮件预警"，只影响每日兜底，不影响 `repository_dispatch`。
+落地过程中踩过两个坑：
+
+1. 曾计划加 `gautamkrishnar/keepalive-workflow` action 防止 60 天无提交导致 `schedule` 被 GitHub 自动禁用，实测该 action 仓库已不可解析（GitHub 返回 `Repository access blocked`，每次运行直接失败在 "Set up job"），已移除——60 天保活退化为"依赖仓库持续活跃 + GitHub 禁用前的邮件预警"，只影响每日兜底，不影响 `repository_dispatch`。
+2. **部署时漏做了下方「步骤 2：授权自己的应用」，导致上线后完全空转**：`push_subscriptions` 订阅创建成功、GET 验证握手通过，一切看起来正常，但由于运动员从未走过 OAuth 授权，Strava 服务端不会给这个 app 推送该运动员的任何事件——订阅是"活的"，却从未真正收到过一条事件。这个坑**无法靠 curl 模拟 POST 发现**（模拟请求直接打到 Worker，绕过了 Strava 是否愿意投递这一层），唯一能验证的方式是让 Strava 真实发一次事件过来，也就是下方验证清单里必须包含"真实新增一条活动"这一步，不能只做模拟测试就收工。
+
+
 
 ## 前置条件
 
@@ -164,7 +169,9 @@ curl -X DELETE "https://www.strava.com/api/v3/push_subscriptions/<订阅ID>?clie
 
 ## 验证清单
 
-> ✅ 以下第 1、3 步已于 2026-07-12 实测通过：手动 `repository_dispatch` → workflow 成功触发 → session 复用登录（0.79 秒完成，未触发完整账密重登录）→ 正确识别「没有要同步的活动」（去重生效）；Worker 线上 GET 验证握手、POST 事件过滤（create/update/他人 owner_id）均按预期返回；Strava 订阅创建成功（GET 握手在生产环境走通）。
+> ⚠️ **第 1-3 步全部通过不代表链路真的通了**——它们验证的是"Worker/GitHub 这一半"，完全不经过 Strava 真实投递。2026-07-12 首次上线时就是这几步全绿、订阅创建也成功，但漏做了「一次性配置步骤」里的步骤 2（OAuth 授权），导致 Strava 从未真正推送过事件，直到用户实测记录了两条真实活动、发现佳明 CN 没收到才发现。**第 4 步（真实新增一条活动）是唯一能验证 Strava 是否愿意投递的步骤，不可跳过。**
+>
+> ✅ 2026-07-12 实测记录：第 1、2、3 步全部通过（`repository_dispatch` 触发成功、session 复用登录 0.79 秒完成未触发重登录、去重逻辑正确、Worker GET/POST 均按预期响应、Strava 订阅创建成功）；但第 4 步最初失败（漏做步骤 2 授权），补授权后手动触发同步验证两条遗漏活动均已补传成功。
 
 1. **不依赖 Strava，先验证 workflow 触发链路**：
    ```bash
@@ -194,7 +201,7 @@ curl -X DELETE "https://www.strava.com/api/v3/push_subscriptions/<订阅ID>?clie
 
 3. **线上验证**：对部署后的 workers.dev 地址重复上面的 GET 握手测试；`npx wrangler@4 tail` 可以实时看日志。
 
-4. **端到端**：在 Garmin Connect 国际网页版用「导入数据」上传一个真实的 GPX/FIT 文件（纯手动录入的运动记录不一定会推送到 Strava；文件导入或真实设备活动才可靠）。观察：`wrangler tail` 出现 POST → `gh run watch` → 1–3 分钟内活动出现在 Garmin CN。之后可以对线上地址重发同一个模拟事件，第二次应该在同步日志里看到「没有要同步的活动」或 409 跳过（验证去重生效）。测试完成后从两侧账号删除测试活动。
+4. **端到端（必做，不可用第 1-3 步替代）**：在 Garmin Connect 国际网页版用「导入数据」上传一个真实的 GPX/FIT 文件，或者干脆等下一次真实设备活动（纯手动录入的运动记录不一定会推送到 Strava；文件导入或真实设备活动才可靠）。观察：`wrangler tail` 出现 POST → `gh run watch` → 1–3 分钟内活动出现在 Garmin CN。之后可以对线上地址重发同一个模拟事件，第二次应该在同步日志里看到「没有要同步的活动」或 409 跳过（验证去重生效）。测试完成后从两侧账号删除测试活动。如果 `wrangler tail` 全程没出现 POST，先回去检查「一次性配置步骤」的步骤 2（OAuth 授权）是否真的做完了——这是最容易漏做、且不会有任何报错提示的一步。
 
 5. **兜底验证**：第二天检查 `gh run list --workflow=sync_garmin_global_to_garmin_cn.yml -e schedule`，确认 00:30 UTC（北京时间 08:30）的兜底运行正常。
 
