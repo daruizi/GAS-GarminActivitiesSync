@@ -29,3 +29,6 @@ Thumbs.db
 
 # Lock files (keep yarn.lock, ignore package-lock.json if using yarn)
 package-lock.json
+
+# Cloudflare Worker local dev secrets
+trigger/.dev.vars

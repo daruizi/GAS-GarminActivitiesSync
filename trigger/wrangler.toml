@@ -1,0 +1,12 @@
+name = "garmin-sync-trigger"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+[vars]
+GITHUB_REPO = "daruizi/GAS-GarminActivitiesSync"
+
+# Secrets (set via `wrangler secret put <NAME>`, never written here):
+#   STRAVA_VERIFY_TOKEN  - random token used only during the Strava subscription handshake
+#   STRAVA_OWNER_ID      - your Strava athlete ID, so the worker ignores events from other athletes
+#   WEBHOOK_PATH          - random path segment; doubles as a cheap shared-secret for the POST endpoint
+#   GH_PAT               - fine-grained GitHub PAT, Contents: Read and write, scoped to this repo only
