@@ -5,8 +5,8 @@ on:
   repository_dispatch:
     types: [new_activity]
   schedule:
-    # 每日兜底：UTC 00:30 = 北京时间 08:30（晨跑结束后，接住 webhook 漏网事件；:30 错峰避开整点调度拥堵）
-    - cron: "30 0 * * *"
+    # 每 3 小时兜底：接住 webhook 漏网事件，最坏情况 3 小时内补上；:30 错峰避开整点调度拥堵
+    - cron: "30 */3 * * *"
 
 # 并发控制：排队等待，防止多个实例同时操作导致 DB 冲突
 concurrency:

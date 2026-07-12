@@ -1,6 +1,6 @@
 {
   "name": "garmin-daily-sync",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "Migrate, gather, synchronize your Garmin fitness data between China server and Global server.",
   "engines": {
     "node": ">=24.0.0"

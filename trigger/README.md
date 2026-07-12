@@ -17,7 +17,7 @@
 - **同步执行器不换**：现有 GitHub Actions workflow（`yarn sync:global2cn`）已经跑得很稳，secrets 也配好了，没有理由重新实现一遍。要改的只是"谁来触发它"，不是"谁来执行它"——所以选 `repository_dispatch`，一个 API 调用就能远程点火现有 workflow，同步逻辑（`src/services/sync.ts` 的去重、409 容忍、session 续期）完全不动。
 - **触发层用 Cloudflare Worker，不是别的**：需要一个能收 Strava webhook 的公网 HTTP 端点。免费、免运维、冷启动够快（Strava 给 2 秒响应窗口）、不需要额外账号体系——比自建服务器或用现有的 Actions 里跑 HTTP server（GitHub Actions 本身不支持长驻监听）更合适。
 - **鉴权用路径当密钥**：Strava webhook 投递没有请求签名机制，用一段随机路径（`WEBHOOK_PATH`）取代传统的 API Key header，成本几乎为零但足够挡住扫描器。
-- **每日兜底不能省**：webhook 投递不是 100% 可靠（Strava 官方文档写明非 2xx 最多重试 3 次就放弃），完全依赖事件驱动会有漏网风险。保留一次低频兜底同步，把"漏网"的后果从"可能永久漏掉"降到"最多等到第二天"。
+- **兜底不能省，但也不用太频繁**：webhook 投递不是 100% 可靠（Strava 官方文档写明非 2xx 最多重试 3 次就放弃），完全依赖事件驱动会有漏网风险。上线首日先用了每日一次，实测发现过于保守；调整为每 3 小时一次（`cron: "30 */3 * * *"`）——相比原来的每小时轮询已经降到 1/3 的运行次数，同时把"漏网"的后果从"可能永久漏掉"收窄到"最多等 3 小时"。
 
 ## 架构
 
@@ -29,7 +29,7 @@ Garmin 设备 → Garmin Connect 国际（官方推送，秒级）→ Strava
 
 Strava 在这条链路里只是「门铃」——我们从不读取任何 Strava 活动数据，同步逻辑仍然直接从 Garmin Global 拉取 FIT 原始文件并上传到 Garmin CN（`src/services/sync.ts` 完全不变）。
 
-每日仍保留一次低频兜底同步（`.github/workflows/sync_garmin_global_to_garmin_cn.yml` 里的 `schedule`），用于接住 webhook 偶尔漏掉的事件。
+仍保留每 3 小时一次的低频兜底同步（`.github/workflows/sync_garmin_global_to_garmin_cn.yml` 里的 `schedule`），用于接住 webhook 偶尔漏掉的事件。
 
 ## 实施计划
 
@@ -38,14 +38,14 @@ Strava 在这条链路里只是「门铃」——我们从不读取任何 Strava
 | 阶段 | 内容 | 产出 |
 |---|---|---|
 | 0. 安全清理 | 排查 `db/garmin.db` 是否仍是活跃持久化机制（结论：不是，已被 `actions/cache` 取代），untrack 掉这个遗留文件 | 1 次提交 |
-| 1. Workflow 触发器改造 | `sync_garmin_global_to_garmin_cn.yml` 加 `repository_dispatch: [new_activity]`；`schedule` 从每小时降为每日 00:30 UTC 兜底；不改动既有的 session cache 逻辑 | 1 次提交 |
+| 1. Workflow 触发器改造 | `sync_garmin_global_to_garmin_cn.yml` 加 `repository_dispatch: [new_activity]`；`schedule` 从每小时降为每 3 小时兜底（上线首日先试过每日一次，实测偏保守后收紧）；不改动既有的 session cache 逻辑 | 1 次提交 |
 | 2. Cloudflare Worker 开发 | 单文件纯 JS Worker：GET 做 Strava 订阅验证握手，POST 过滤 `activity create` 事件并异步触发 `repository_dispatch` | `trigger/worker.js` + `wrangler.toml` |
 | 3. 一次性人工配置 | Strava 应用凭据、OAuth 自授权、GitHub PAT、Cloudflare 登录部署、Worker secrets 写入、创建 Strava 订阅（完整步骤见下方「一次性配置步骤」） | 线上 Worker + 有效订阅 |
 | 4. 端到端验证 | 手动 `repository_dispatch` 触发 → 确认 workflow 正常跑完；GET/POST 分别测试 Worker 的鉴权、过滤、去重逻辑 | 验证清单见下方 |
 
 落地过程中踩过两个坑：
 
-1. 曾计划加 `gautamkrishnar/keepalive-workflow` action 防止 60 天无提交导致 `schedule` 被 GitHub 自动禁用，实测该 action 仓库已不可解析（GitHub 返回 `Repository access blocked`，每次运行直接失败在 "Set up job"），已移除——60 天保活退化为"依赖仓库持续活跃 + GitHub 禁用前的邮件预警"，只影响每日兜底，不影响 `repository_dispatch`。
+1. 曾计划加 `gautamkrishnar/keepalive-workflow` action 防止 60 天无提交导致 `schedule` 被 GitHub 自动禁用，实测该 action 仓库已不可解析（GitHub 返回 `Repository access blocked`，每次运行直接失败在 "Set up job"），已移除——60 天保活退化为"依赖仓库持续活跃 + GitHub 禁用前的邮件预警"，只影响兜底 schedule，不影响 `repository_dispatch`。
 2. **部署时漏做了下方「步骤 2：授权自己的应用」，导致上线后完全空转**：`push_subscriptions` 订阅创建成功、GET 验证握手通过，一切看起来正常，但由于运动员从未走过 OAuth 授权，Strava 服务端不会给这个 app 推送该运动员的任何事件——订阅是"活的"，却从未真正收到过一条事件。这个坑**无法靠 curl 模拟 POST 发现**（模拟请求直接打到 Worker，绕过了 Strava 是否愿意投递这一层），唯一能验证的方式是让 Strava 真实发一次事件过来，也就是下方验证清单里必须包含"真实新增一条活动"这一步，不能只做模拟测试就收工。
 
 
@@ -101,7 +101,7 @@ curl -X POST https://www.strava.com/api/v3/oauth/token \
 
 - Repository access → **Only select repositories** → 选择本仓库
 - Permissions → **Contents: Read and write**（足以调用 `repository_dispatch`，不需要更多权限）
-- Expiration：建议 1 年，并在日历上设一个到期提醒（到期后事件驱动会失效，但每日兜底仍正常工作）
+- Expiration：建议 1 年，并在日历上设一个到期提醒（到期后事件驱动会失效，但每 3 小时的兜底 schedule 仍正常工作）
 
 复制生成的 token。
 
@@ -203,19 +203,19 @@ curl -X DELETE "https://www.strava.com/api/v3/push_subscriptions/<订阅ID>?clie
 
 4. **端到端（必做，不可用第 1-3 步替代）**：在 Garmin Connect 国际网页版用「导入数据」上传一个真实的 GPX/FIT 文件，或者干脆等下一次真实设备活动（纯手动录入的运动记录不一定会推送到 Strava；文件导入或真实设备活动才可靠）。观察：`wrangler tail` 出现 POST → `gh run watch` → 1–3 分钟内活动出现在 Garmin CN。之后可以对线上地址重发同一个模拟事件，第二次应该在同步日志里看到「没有要同步的活动」或 409 跳过（验证去重生效）。测试完成后从两侧账号删除测试活动。如果 `wrangler tail` 全程没出现 POST，先回去检查「一次性配置步骤」的步骤 2（OAuth 授权）是否真的做完了——这是最容易漏做、且不会有任何报错提示的一步。
 
-5. **兜底验证**：第二天检查 `gh run list --workflow=sync_garmin_global_to_garmin_cn.yml -e schedule`，确认 00:30 UTC（北京时间 08:30）的兜底运行正常。
+5. **兜底验证**：几小时后检查 `gh run list --workflow=sync_garmin_global_to_garmin_cn.yml -e schedule`，确认每 3 小时（`30 */3 * * *`，即 UTC 整点+30 分）的兜底运行正常。
 
 ## 故障模式与缓解
 
 | 故障 | 影响 | 缓解 |
 |---|---|---|
-| Strava 事件丢失/未送达 | 该活动延迟同步 | 每日 08:30 兜底扫最近 10 条活动 |
+| Strava 事件丢失/未送达 | 该活动延迟同步 | 每 3 小时兜底扫最近 10 条活动 |
 | Worker 宕机 / Cloudflare 故障 | 事件丢失（Strava 对非 2xx 响应最多重试 3 次） | 兜底 cron 接住；`wrangler tail` 排查 |
-| Actions cache 被驱逐（7 天未用才会被驱逐，每日 schedule 天然保活） | 下次运行需要重新登录 Garmin 一次 | 无需处理；workflow 的 concurrency 串行执行，不会并发触发多次登录 |
+| Actions cache 被驱逐（7 天未用才会被驱逐，每 3 小时 schedule 天然保活） | 下次运行需要重新登录 Garmin 一次 | 无需处理；workflow 的 concurrency 串行执行，不会并发触发多次登录 |
 | 重复事件 / Strava 重投 | 多跑一次同步 workflow | SQLite 按 activity_id 去重 + 上传 409 视为已同步，空转约 3 次网络调用 |
 | 非 Garmin 来源的 Strava 活动（手动录入、Zwift 直连等） | 触发一次空转运行 | 无害，Garmin Global 侧没有新活动时直接判定"无需同步" |
-| GitHub PAT 过期 / 被吊销 | dispatch 调用 401，事件驱动失效（Worker 日志可见） | 每日兜底仍正常工作；到期前重新生成并 `wrangler secret put GH_PAT` |
-| 60 天无提交导致 schedule 被 GitHub 自动禁用 | 只影响每日兜底，事件驱动不受影响（`repository_dispatch` 不计入此规则） | 保持仓库有正常提交活动即可重置计时；GitHub 禁用前也会发邮件预警。曾尝试用 `gautamkrishnar/keepalive-workflow` action 自动保活，但该 action 仓库已不可解析会导致运行直接失败，已放弃 |
+| GitHub PAT 过期 / 被吊销 | dispatch 调用 401，事件驱动失效（Worker 日志可见） | 兜底 schedule 仍正常工作；到期前重新生成并 `wrangler secret put GH_PAT` |
+| 60 天无提交导致 schedule 被 GitHub 自动禁用 | 只影响兜底 schedule，事件驱动不受影响（`repository_dispatch` 不计入此规则） | 保持仓库有正常提交活动即可重置计时；GitHub 禁用前也会发邮件预警。曾尝试用 `gautamkrishnar/keepalive-workflow` action 自动保活，但该 action 仓库已不可解析会导致运行直接失败，已放弃 |
 
 ## 回滚
 
@@ -223,7 +223,7 @@ curl -X DELETE "https://www.strava.com/api/v3/push_subscriptions/<订阅ID>?clie
 
 1. 删除 Strava 订阅：`curl -X DELETE .../push_subscriptions/<订阅ID>?...`（见上文）
 2. 下线 Worker：`npx wrangler@4 delete`
-3. 恢复每小时轮询：`git revert` 引入 `repository_dispatch` / 每日 schedule 的那次提交
+3. 恢复每小时轮询：`git revert` 引入 `repository_dispatch` / 降频 schedule 的相关提交
 4. 吊销 GitHub PAT：[github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens)
 
-即使什么都不回滚，只要 Strava 订阅被删除或 Worker 下线，同步 workflow 本身完全不受影响——它只是少了一个触发来源，每日兜底会继续正常运行。
+即使什么都不回滚，只要 Strava 订阅被删除或 Worker 下线，同步 workflow 本身完全不受影响——它只是少了一个触发来源，每 3 小时的兜底 schedule 会继续正常运行。
